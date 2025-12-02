@@ -1,4 +1,5 @@
 import { AppSidebar } from "@/components/AppSidebar";
+import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TrendingUp, TrendingDown, DollarSign, Package, ShoppingCart, Users } from "lucide-react";
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
@@ -34,16 +35,20 @@ const Dashboard = () => {
   ];
 
   return (
-    <div className="flex h-screen bg-background overflow-hidden">
-      <AppSidebar />
-      <main className="flex-1 overflow-y-auto">
-        {/* Header Section */}
-        <div className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-10">
-          <div className="px-8 py-6">
-            <h1 className="text-3xl font-bold text-foreground">Dashboard</h1>
-            <p className="text-muted-foreground mt-1">Overview of your store performance</p>
+    <SidebarProvider>
+      <div className="flex h-screen w-full bg-background overflow-hidden">
+        <AppSidebar />
+        <main className="flex-1 overflow-y-auto">
+          {/* Header Section */}
+          <div className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-10">
+            <div className="px-8 py-6 flex items-center gap-4">
+              <SidebarTrigger />
+              <div>
+                <h1 className="text-3xl font-bold text-foreground">Dashboard</h1>
+                <p className="text-muted-foreground mt-1">Overview of your store performance</p>
+              </div>
+            </div>
           </div>
-        </div>
 
         <div className="p-8 space-y-6">
           {/* Top Metrics Cards */}
@@ -294,7 +299,8 @@ const Dashboard = () => {
           </div>
         </div>
       </main>
-    </div>
+      </div>
+    </SidebarProvider>
   );
 };
 
