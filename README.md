@@ -1,78 +1,174 @@
-# Welcome to your Lovable project
+# LW Mini Mart - Smart Retail Management System
 
-## Project info
+A comprehensive, AI-powered retail management platform designed for convenience stores and mini-marts. Transform your store operations with real-time inventory tracking, profit analytics, and intelligent stock management.
 
-**URL**: https://lovable.dev/projects/45bd9fa7-7ddb-46ce-ab58-d8355245b856
+## 🚀 Features
 
-## How can I edit this code?
+- **Smart Inventory Management** - Real-time tracking with AI-powered stock predictions
+- **Point of Sale (POS)** - Fast, intuitive checkout system
+- **Profit Analytics** - Comprehensive dashboard with revenue insights and trends
+- **Traffic Light Stock Alerts** - Visual indicators for low stock, expiring items, and reorder points
+- **Multi-Currency Support** - Handle transactions in multiple currencies
+- **Receipt Generation** - Thermal printer-ready receipts and PDF reports
+- **Security Monitoring** - 24/7 data protection with enterprise-grade storage
+- **Dark/Light Mode** - Modern UI with theme switching
 
-There are several ways of editing your application.
+## 🛠️ Tech Stack
 
-**Use Lovable**
+| Layer | Technology | Purpose |
+| :--- | :--- | :--- |
+| **Frontend** | React.js 18+ | Modern, reactive user interface |
+| **Styling** | Tailwind CSS 3.4+ | Utility-first CSS framework |
+| **UI Components** | Shadcn/UI | Accessible, customizable components |
+| **Build Tool** | Vite | Fast development and optimized builds |
+| **Language** | TypeScript | Type-safe development |
+| **Database** | PostgreSQL 14+ | Enterprise-grade data storage |
+| **ORM** | Prisma 5+ | Type-safe database queries |
+| **Charts** | Recharts | Interactive data visualization |
+| **State Management** | Zustand | Lightweight state management |
+| **Icons** | Lucide React | Modern icon library |
+| **Authentication** | Supabase Auth | Secure user authentication |
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/45bd9fa7-7ddb-46ce-ab58-d8355245b856) and start prompting.
+## 📋 Prerequisites
 
-Changes made via Lovable will be committed automatically to this repo.
+Before you begin, ensure you have the following installed:
 
-**Use your preferred IDE**
+- **Node.js** v18 (LTS) or higher - [Download](https://nodejs.org/)
+- **PostgreSQL** v14+ - [Download](https://www.postgresql.org/download/)
+  - Default configuration: Port `5432`
+  - Default user: `postgres`
+  - Default password: `postgres` or `root`
+- **npm** or **yarn** package manager
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+### Recommended VS Code Extensions
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+- ES7+ React Snippets
+- Tailwind CSS IntelliSense
+- Prisma (for schema syntax highlighting)
+- Prettier (code formatting)
 
-Follow these steps:
+## 🚀 Getting Started
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+### 1. Clone the Repository
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+```bash
+git clone <YOUR_REPOSITORY_URL>
+cd LW-Minimart
+```
 
-# Step 3: Install the necessary dependencies.
-npm i
+### 2. Install Dependencies
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
+```bash
+npm install
+```
+
+### 3. Environment Setup
+
+Create a `.env` file in the root directory:
+
+```env
+VITE_SUPABASE_URL=your_supabase_url
+VITE_SUPABASE_PUBLISHABLE_KEY=your_supabase_key
+VITE_SUPABASE_PROJECT_ID=your_project_id
+```
+
+### 4. Database Setup
+
+Ensure PostgreSQL is running and configure your database connection in the Prisma schema file.
+
+```bash
+# Generate Prisma client
+npx prisma generate
+
+# Run migrations
+npx prisma migrate dev
+```
+
+### 5. Start Development Server
+
+```bash
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+The application will be available at `http://localhost:5173` (or the port shown in your terminal).
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+## 📁 Project Structure
 
-**Use GitHub Codespaces**
+```
+LW-Minimart/
+├── src/
+│   ├── components/     # Reusable UI components
+│   ├── pages/          # Page components
+│   ├── hooks/          # Custom React hooks
+│   ├── lib/            # Utility functions
+│   ├── assets/         # Static assets (images, logos)
+│   └── integrations/   # Third-party integrations
+├── public/             # Public assets
+├── prisma/             # Database schema and migrations
+└── package.json        # Dependencies and scripts
+```
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+## 🎯 Available Scripts
 
-## What technologies are used for this project?
+- `npm run dev` - Start development server
+- `npm run build` - Build for production
+- `npm run preview` - Preview production build
+- `npm run lint` - Run ESLint
+- `npx prisma studio` - Open Prisma Studio (database GUI)
 
-This project is built with:
+## 🔐 Authentication
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+The application uses Supabase for authentication. Users can:
+- Sign up with email and password
+- Sign in to access the dashboard
+- Manage their store settings and preferences
 
-## How can I deploy this project?
+## 💰 Multi-Currency Support
 
-Simply open [Lovable](https://lovable.dev/projects/45bd9fa7-7ddb-46ce-ab58-d8355245b856) and click on Share -> Publish.
+LW Mini Mart supports multiple currencies including:
+- USD, EUR, GBP, JPY
+- PHP, SGD, MYR, THB
+- IDR, VND, INR, CNY
+- AUD, CAD
 
-## Can I connect a custom domain to my Lovable project?
+Currency preferences are saved and persist across sessions.
 
-Yes, you can!
+## 📊 Dashboard Features
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+- **Revenue Overview** - Daily, weekly, and monthly revenue tracking
+- **Sales Analytics** - Interactive charts and graphs
+- **Inventory Status** - Real-time stock levels and alerts
+- **Top Products** - Best-selling items analysis
+- **Customer Insights** - Transaction patterns and trends
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+## 🎨 Customization
 
+The application supports:
+- Dark and light themes
+- Customizable color schemes
+- Responsive design for all screen sizes
+- Accessible UI components
 
+## 🤝 Contributing
 
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
+## 📝 License
 
+This project is proprietary software. All rights reserved.
+
+## 📞 Support
+
+For support and inquiries, please contact the development team or visit the project documentation.
+
+## 🙏 Acknowledgments
+
+Built with modern web technologies to provide a seamless retail management experience.
+
+---
+
+**LW Mini Mart** - Empowering small businesses with smart retail solutions.
