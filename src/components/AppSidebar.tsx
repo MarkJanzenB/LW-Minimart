@@ -6,7 +6,8 @@ import {
   Package,
   DollarSign,
   Settings,
-  LogOut
+  LogOut,
+  History
 } from "lucide-react";
 import logoWithText from "@/assets/lw-logo-with-text.png";
 import logoIcon from "@/assets/lw-logo-icon.png";
@@ -28,6 +29,16 @@ const menuItems = [
   { path: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { path: "/pos", label: "POS", icon: ShoppingCart },
   { path: "/inventory", label: "Inventory", icon: Package },
+  {
+    path: "/history",
+    label: "History",
+    icon: History,
+    subItems: [
+      { path: "/history/restock", label: "Restock" },
+      { path: "/history/sales", label: "Sales" },
+      { path: "/history/spoilage", label: "Spoilage" },
+    ],
+  },
   { path: "/cashflow", label: "Cashflow", icon: DollarSign },
   { path: "/reports", label: "Reports", icon: FileText },
 ];
@@ -39,7 +50,12 @@ export function AppSidebar() {
   const { open } = useSidebar();
   const currentPath = location.pathname;
 
-  const isActive = (path: string) => currentPath === path;
+    const isActive = (path: string) => {
+    if (path === '/pos' && currentPath.startsWith('/pos/')) {
+      return true;
+    }
+    return currentPath === path;
+  };
 
   const handleSignOut = async () => {
     try {
@@ -70,20 +86,55 @@ export function AppSidebar() {
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu className="space-y-1">
-              {menuItems.map((item) => (
-                <SidebarMenuItem key={item.path}>
-                  <SidebarMenuButton 
-                    asChild 
-                    isActive={isActive(item.path)}
-                    className="hover:bg-sidebar-accent transition-colors"
-                  >
-                    <Link to={item.path} className="flex items-center gap-3 px-3 py-2.5 rounded-lg">
-                      <item.icon className="w-5 h-5" />
-                      <span className="font-medium">{item.label}</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
+              {menuItems.map((item) =>
+                item.subItems ? (
+                  <SidebarMenuItem key={item.path} asChild>
+                    <SidebarGroup isExpanded={currentPath.startsWith(item.path)}>
+                      <SidebarMenuButton
+                        isSubmenu
+                        isActive={isActive(item.path)}
+                        className="hover:bg-sidebar-accent transition-colors"
+                      >
+                        <item.icon className="w-5 h-5" />
+                        <span className="font-medium">{item.label}</span>
+                      </SidebarMenuButton>
+                      <SidebarGroupContent className="pt-1">
+                        <SidebarMenu className="space-y-1">
+                          {item.subItems.map((subItem) => (
+                            <SidebarMenuItem key={subItem.path}>
+                              <SidebarMenuButton
+                                asChild
+                                isActive={currentPath === subItem.path}
+                                className="hover:bg-sidebar-accent transition-colors text-sm justify-start"
+                              >
+                                <Link to={subItem.path} className="flex items-center gap-3 px-3 py-2.5 rounded-lg">
+                                  <span className="w-5 h-5 flex items-center justify-center">
+                                    <span className={`w-1.5 h-1.5 rounded-full ${currentPath === subItem.path ? 'bg-primary' : 'bg-muted-foreground/50'}`}></span>
+                                  </span>
+                                  <span className="font-medium">{subItem.label}</span>
+                                </Link>
+                              </SidebarMenuButton>
+                            </SidebarMenuItem>
+                          ))}
+                        </SidebarMenu>
+                      </SidebarGroupContent>
+                    </SidebarGroup>
+                  </SidebarMenuItem>
+                ) : (
+                  <SidebarMenuItem key={item.path}>
+                    <SidebarMenuButton
+                      asChild
+                      isActive={isActive(item.path)}
+                      className="hover:bg-sidebar-accent transition-colors"
+                    >
+                      <Link to={item.path} className="flex items-center gap-3 px-3 py-2.5 rounded-lg">
+                        <item.icon className="w-5 h-5" />
+                        <span className="font-medium">{item.label}</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                )
+              )}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>

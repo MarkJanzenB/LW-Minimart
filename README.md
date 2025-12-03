@@ -17,28 +17,26 @@ A comprehensive, AI-powered retail management platform designed for convenience 
 
 | Layer | Technology | Purpose |
 | :--- | :--- | :--- |
-| **Frontend** | React.js 18+ | Modern, reactive user interface |
+| **Frontend** | React 18+ | Modern, reactive user interface |
 | **Styling** | Tailwind CSS 3.4+ | Utility-first CSS framework |
-| **UI Components** | Shadcn/UI | Accessible, customizable components |
+| **UI Components** | shadcn/ui | Accessible, customizable components |
 | **Build Tool** | Vite | Fast development and optimized builds |
 | **Language** | TypeScript | Type-safe development |
-| **Database** | PostgreSQL 14+ | Enterprise-grade data storage |
-| **ORM** | Prisma 5+ | Type-safe database queries |
+| **Desktop Shell** | Electron | Cross-platform desktop runtime |
+| **Local Database** | SQLite (better-sqlite3) | Offline-first data storage |
 | **Charts** | Recharts | Interactive data visualization |
 | **State Management** | Zustand | Lightweight state management |
 | **Icons** | Lucide React | Modern icon library |
-| **Authentication** | Supabase Auth | Secure user authentication |
+| **Authentication** | Electron IPC + SQLite users | Local, offline auth |
 
 ## 📋 Prerequisites
 
 Before you begin, ensure you have the following installed:
 
 - **Node.js** v18 (LTS) or higher - [Download](https://nodejs.org/)
-- **PostgreSQL** v14+ - [Download](https://www.postgresql.org/download/)
-  - Default configuration: Port `5432`
-  - Default user: `postgres`
-  - Default password: `postgres` or `root`
-- **npm** or **yarn** package manager
+- **npm** package manager (bundled with Node.js)
+- **Git** for cloning and version control
+- A supported OS for Electron (Windows, macOS, or Linux)
 
 ### Recommended VS Code Extensions
 
@@ -52,7 +50,7 @@ Before you begin, ensure you have the following installed:
 ### 1. Clone the Repository
 
 ```bash
-git clone <YOUR_REPOSITORY_URL>
+git clone https://github.com/MarkJanzenB/LW-Minimart.git
 cd LW-Minimart
 ```
 
@@ -62,29 +60,7 @@ cd LW-Minimart
 npm install
 ```
 
-### 3. Environment Setup
-
-Create a `.env` file in the root directory:
-
-```env
-VITE_SUPABASE_URL=your_supabase_url
-VITE_SUPABASE_PUBLISHABLE_KEY=your_supabase_key
-VITE_SUPABASE_PROJECT_ID=your_project_id
-```
-
-### 4. Database Setup
-
-Ensure PostgreSQL is running and configure your database connection in the Prisma schema file.
-
-```bash
-# Generate Prisma client
-npx prisma generate
-
-# Run migrations
-npx prisma migrate dev
-```
-
-### 5. Start Development Server
+### 3. Start Web Development Server
 
 ```bash
 npm run dev
@@ -102,25 +78,32 @@ LW-Minimart/
 │   ├── hooks/          # Custom React hooks
 │   ├── lib/            # Utility functions
 │   ├── assets/         # Static assets (images, logos)
-│   └── integrations/   # Third-party integrations
+│   └── integrations/   # Frontend integrations & types
 ├── public/             # Public assets
-├── prisma/             # Database schema and migrations
+├── electron/           # Electron main, preload, and IPC handlers
 └── package.json        # Dependencies and scripts
 ```
 
 ## 🎯 Available Scripts
 
-- `npm run dev` - Start development server
-- `npm run build` - Build for production
+- `npm run dev` - Start web development server (Vite)
+- `npm run build` - Build web assets for production
 - `npm run preview` - Preview production build
 - `npm run lint` - Run ESLint
-- `npx prisma studio` - Open Prisma Studio (database GUI)
 
 ### 🖥️ Electron Desktop App
 
 The project can also run as a desktop application using Electron with a local SQLite database.
 
 - `npm run electron` - Launch the Electron app (uses the built web assets by default)
+
+Before running Electron with native SQLite, ensure `better-sqlite3` is correctly built for your Electron version (only needed when dependencies or Node/Electron versions change):
+
+```bash
+npm install -D electron-rebuild
+
+npx electron-rebuild -f -w better-sqlite3
+```
 
 **Recommended dev flow:**
 
@@ -149,10 +132,21 @@ npm run electron   # launch Electron using the built assets
 
 ## 🔐 Authentication
 
-The application uses Supabase for authentication. Users can:
-- Sign up with email and password
-- Sign in to access the dashboard
-- Manage their store settings and preferences
+Authentication is handled locally via Electron IPC and SQLite. User accounts are stored in a local `store.db` file inside the `electron/db` directory.
+
+On first run, the app seeds two demo accounts:
+
+- **Owner**
+  - Email: `owner@test.com`
+  - Password: `owner123`
+  - Role: `owner`
+
+- **Cashier**
+  - Email: `cashier@test.com`
+  - Password: `cashier123`
+  - Role: `cashier`
+
+You can create additional users from inside the app (Sign Up) or by modifying the SQLite database directly.
 
 ## 💰 Multi-Currency Support
 
