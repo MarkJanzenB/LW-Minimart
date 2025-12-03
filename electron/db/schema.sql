@@ -3,4 +3,4 @@ CREATE TABLE IF NOT EXISTS users (
   username TEXT UNIQUE,
   password TEXT,
   role TEXT CHECK(role IN ('owner','cashier'))
-);
+); 

@@ -2,7 +2,6 @@ import { useState, useEffect, useRef } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Navigation } from "@/components/Navigation";
-import { supabase } from "@/integrations/supabase/client";
 import { AlertTriangle, Shield, TrendingUp, Package, DollarSign, BarChart3, Zap, CheckCircle, Layers, Bell, Cloud, RefreshCw, LineChart, Mail, Phone, MessageSquare, HelpCircle, Send } from "lucide-react";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Input } from "@/components/ui/input";
@@ -76,7 +75,6 @@ const FeatureCard = ({ image, icon: Icon, title, description, iconBgColor, iconC
 };
 
 const Index = () => {
-  const [user, setUser] = useState<any>(null);
   const navigate = useNavigate();
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -90,23 +88,18 @@ const Index = () => {
   });
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        setUser(session?.user ?? null);
-        if (session?.user) {
+    const checkUser = async () => {
+      try {
+        const { user } = await window.api.auth.getCurrentUser();
+        if (user) {
           navigate("/dashboard");
         }
+      } catch (error) {
+        console.error("Error checking current user:", error);
       }
-    );
+    };
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        navigate("/dashboard");
-      }
-    });
-
-    return () => subscription.unsubscribe();
+    checkUser();
   }, [navigate]);
 
   useEffect(() => {

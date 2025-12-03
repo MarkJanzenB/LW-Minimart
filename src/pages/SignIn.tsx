@@ -4,7 +4,6 @@ import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import logo from "@/assets/lw-mini-mart-logo.png";
 
@@ -17,9 +16,13 @@ const SignIn = () => {
 
   useEffect(() => {
     const checkUser = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        navigate("/");
+      try {
+        const { user } = await window.api.auth.getCurrentUser();
+        if (user) {
+          navigate("/");
+        }
+      } catch (error) {
+        console.error("Error checking current user:", error);
       }
     };
     checkUser();
@@ -30,12 +33,11 @@ const SignIn = () => {
     setLoading(true);
 
     try {
-      const { error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
+      const response = await window.api.auth.login(email, password);
 
-      if (error) throw error;
+      if (!response.success) {
+        throw new Error(response.message || "Invalid credentials");
+      }
 
       toast({
         title: "Welcome back!",

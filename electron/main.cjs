@@ -1,9 +1,9 @@
-import { app, BrowserWindow } from "electron";
-import { join } from "path";
-import Database from "better-sqlite3";
-import { registerAuthIpc } from "./ipc/auth";
+const { app, BrowserWindow } = require("electron");
+const { join } = require("path");
+const Database = require("better-sqlite3");
+const { registerAuthIpc } = require("./ipc/auth.cjs");
 
-let mainWindow: BrowserWindow | null = null;
+let mainWindow = null;
 
 const dbPath = join(__dirname, "db", "store.db");
 const db = new Database(dbPath);
@@ -17,7 +17,7 @@ db.exec(`
   );
 `);
 
-const userCount = db.prepare("SELECT COUNT(*) as count FROM users").get() as { count: number };
+const userCount = db.prepare("SELECT COUNT(*) as count FROM users").get();
 if (userCount.count === 0) {
   const insert = db.prepare("INSERT INTO users (username, password, role) VALUES (?, ?, ?)");
   insert.run("owner@test.com", "owner123", "owner");
@@ -42,7 +42,7 @@ function createWindow() {
   });
 
   mainWindow.once("ready-to-show", () => {
-    mainWindow?.show();
+    if (mainWindow) mainWindow.show();
   });
 
   if (isDev) {
@@ -56,10 +56,14 @@ app.whenReady().then(() => {
   createWindow();
 
   app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    if (BrowserWindow.getAllWindows().length === 0) {
+      createWindow();
+    }
   });
 });
 
 app.on("window-all-closed", () => {
-  if (process.platform !== "darwin") app.quit();
+  if (process.platform !== "darwin") {
+    app.quit();
+  }
 });
