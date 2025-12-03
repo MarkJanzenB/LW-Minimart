@@ -50,7 +50,7 @@ Before you begin, ensure you have the following installed:
 ### 1. Clone the Repository
 
 ```bash
-git clone <YOUR_REPOSITORY_URL>
+git clone https://github.com/MarkJanzenB/LW-Minimart.git
 cd LW-Minimart
 ```
 
