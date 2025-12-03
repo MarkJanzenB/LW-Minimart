@@ -1,9 +1,39 @@
+import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { AppSidebar } from "@/components/AppSidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TrendingUp, TrendingDown, DollarSign, Package, ShoppingCart, Users } from "lucide-react";
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 
+type Role = "owner" | "cashier";
+
+type CurrentUser = {
+  id: number;
+  username: string;
+  role: Role;
+};
+
 const Dashboard = () => {
+  const [user, setUser] = useState<CurrentUser | null>(null);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const loadUser = async () => {
+      const current = await window.api.auth.getCurrentUser();
+      if (!current) {
+        navigate("/");
+        return;
+      }
+      setUser(current as CurrentUser);
+    };
+
+    void loadUser();
+  }, [navigate]);
+
+  const handleLogout = async () => {
+    await window.api.auth.logout();
+    navigate("/");
+  };
   // Sample data for charts
   const salesData = [
     { month: "Jan", sales: 4000 },
@@ -37,11 +67,66 @@ const Dashboard = () => {
     <div className="flex h-screen bg-background overflow-hidden">
       <AppSidebar />
       <main className="flex-1 overflow-y-auto">
-        {/* Header Section */}
         <div className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-10">
           <div className="px-8 py-6">
-            <h1 className="text-3xl font-bold text-foreground">Dashboard</h1>
-            <p className="text-muted-foreground mt-1">Overview of your store performance</p>
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <h1 className="text-3xl font-bold text-foreground">
+                  {user ? `Welcome, ${user.role === "owner" ? "Owner" : "Cashier"}` : "Dashboard"}
+                </h1>
+                <p className="text-muted-foreground mt-1">
+                  {user?.role === "owner"
+                    ? "You have full access to all modules."
+                    : user?.role === "cashier"
+                      ? "You can record sales and expenses only."
+                      : "Overview of your store performance"}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="inline-flex items-center rounded-md border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-muted"
+              >
+                Logout
+              </button>
+            </div>
+            <div className="mt-4 flex flex-wrap gap-2 text-sm">
+              <button
+                type="button"
+                className="px-3 py-1 rounded-md border border-dashed border-muted-foreground/40 text-muted-foreground cursor-not-allowed opacity-70"
+                disabled
+              >
+                Inventory (coming soon)
+              </button>
+              <button
+                type="button"
+                className="px-3 py-1 rounded-md border border-dashed border-muted-foreground/40 text-muted-foreground cursor-not-allowed opacity-70"
+                disabled
+              >
+                Sales (coming soon)
+              </button>
+              <button
+                type="button"
+                className="px-3 py-1 rounded-md border border-dashed border-muted-foreground/40 text-muted-foreground cursor-not-allowed opacity-70"
+                disabled
+              >
+                Expenses (coming soon)
+              </button>
+              <button
+                type="button"
+                className="px-3 py-1 rounded-md border border-dashed border-muted-foreground/40 text-muted-foreground cursor-not-allowed opacity-70"
+                disabled
+              >
+                Reports (coming soon)
+              </button>
+              <button
+                type="button"
+                className="px-3 py-1 rounded-md border border-dashed border-muted-foreground/40 text-muted-foreground cursor-not-allowed opacity-70"
+                disabled
+              >
+                Settings (coming soon)
+              </button>
+            </div>
           </div>
         </div>
 

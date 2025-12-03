@@ -8,7 +8,6 @@ import {
   Package,
   DollarSign
 } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 
@@ -20,15 +19,15 @@ export const AppSidebar = () => {
   const isActive = (path: string) => location.pathname === path;
 
   const handleSignOut = async () => {
-    const { error } = await supabase.auth.signOut();
-    if (error) {
+    try {
+      await window.api.auth.logout();
+      navigate("/");
+    } catch (error: any) {
       toast({
         title: "Error signing out",
-        description: error.message,
+        description: error?.message ?? "Unable to log out.",
         variant: "destructive",
       });
-    } else {
-      navigate("/");
     }
   };
 

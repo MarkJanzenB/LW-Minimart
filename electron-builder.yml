@@ -1,0 +1,11 @@
+appId: com.lifewood.lwminimart
+productName: LW-Minimart
+files:
+  - dist/**
+  - dist-electron/**
+  - package.json
+extraMetadata:
+  main: dist-electron/main.js
+directories:
+  output: release
+asar: true
