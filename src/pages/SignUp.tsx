@@ -3,7 +3,6 @@ import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import logo from "@/assets/lw-mini-mart-logo.png";
 
@@ -17,9 +16,13 @@ const SignUp = () => {
 
   useEffect(() => {
     const checkUser = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        navigate("/");
+      try {
+        const { user } = await window.api.auth.getCurrentUser();
+        if (user) {
+          navigate("/");
+        }
+      } catch (error) {
+        console.error("Error checking current user:", error);
       }
     };
     checkUser();
@@ -49,15 +52,11 @@ const SignUp = () => {
     setLoading(true);
 
     try {
-      const { error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          emailRedirectTo: `${window.location.origin}/`,
-        },
-      });
+      const response = await window.api.auth.register(email, password);
 
-      if (error) throw error;
+      if (!response.success) {
+        throw new Error(response.message || "Unable to create account");
+      }
 
       toast({
         title: "Account created!",
