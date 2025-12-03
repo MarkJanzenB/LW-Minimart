@@ -1,5 +1,4 @@
-import { AppSidebar } from "@/components/AppSidebar";
-import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TrendingUp, TrendingDown, DollarSign, Package, ShoppingCart, Users } from "lucide-react";
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
@@ -35,10 +34,7 @@ const Dashboard = () => {
   ];
 
   return (
-    <SidebarProvider>
-      <div className="flex h-screen w-full bg-background overflow-hidden">
-        <AppSidebar />
-        <main className="flex-1 overflow-y-auto">
+        <>
           {/* Header Section */}
           <div className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-10">
             <div className="px-8 py-6 flex items-center gap-4">
@@ -298,9 +294,7 @@ const Dashboard = () => {
             </Card>
           </div>
         </div>
-      </main>
-      </div>
-    </SidebarProvider>
+        </>
   );
 };
 
