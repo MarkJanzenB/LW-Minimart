@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Search, Scan, ShoppingCart, CreditCard } from 'lucide-react';
+import { Search, Scan, ShoppingCart, Wallet } from 'lucide-react';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 
 import { Product, CartItem, Transaction, ViewState } from '@/integrations/supabase/types'; 
@@ -128,6 +128,16 @@ function PosPage() {
         searchInputRef.current?.focus();
         // Ideally this toggles a "Scan Mode", but focusing search works for barcode scanners acting as keyboards
       }
+      // F1: Checkout (Cash)
+      if (e.key === 'F1') {
+        e.preventDefault();
+        if (view === 'pos' && cart.length > 0) handleCheckout();
+      }
+      // Escape: Clear Cart
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        if (cart.length > 0) clearCart();
+      }
       // F12: Checkout
       if (e.key === 'F12') {
         e.preventDefault();
@@ -155,7 +165,8 @@ function PosPage() {
           <div className="text-sm text-muted-foreground font-mono space-x-4">
             <span>F2: Search</span>
             <span>F3: Scan</span>
-            <span>F12: Checkout</span>
+            <span>F1: Pay</span>
+            <span>Esc: Clear</span>
           </div>
         </div>
       </div>
@@ -187,11 +198,9 @@ function PosPage() {
 
            {/* Product Grid */}
            <div className="flex-1 overflow-y-auto pr-2 pb-20">
-             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+             <div className="grid grid-cols-4 gap-4">
                {filteredProducts.map(product => (
-                 <div key={product.id} className="h-64">
-                   <ProductCard product={product} onClick={addToCart} />
-                 </div>
+                 <ProductCard key={product.id} product={product} onClick={addToCart} />
                ))}
                {filteredProducts.length === 0 && (
                  <div className="col-span-full flex flex-col items-center justify-center text-stone-400 mt-20">
@@ -256,20 +265,13 @@ function PosPage() {
                </div>
              </div>
 
-             <div className="grid grid-cols-2 gap-3">
-               <button 
-                  onClick={() => handleCheckout()}
-                  disabled={cart.length === 0}
-                  className="px-4 py-3 border border-border rounded-lg font-bold text-muted-foreground hover:bg-muted transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-               >
-                 <CreditCard size={18} /> Card (F5)
-               </button>
+             <div className="grid gap-3">
                <button 
                   onClick={() => handleCheckout()}
                   disabled={cart.length === 0}
                   className="px-4 py-3 bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg font-bold shadow-md transition-all active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
                >
-                 <span className="text-lg">💵</span> Cash (F1)
+                 <Wallet size={18} /> Cash (F1)
                </button>
              </div>
           </div>
