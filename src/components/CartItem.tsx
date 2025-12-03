@@ -1,5 +1,5 @@
 import React from 'react';
-import { CartItem as CartItemType } from '../types';
+import { CartItem as CartItemType } from '@/integrations/supabase/types';
 import { Plus, Minus, Trash2, Package } from 'lucide-react';
 
 interface CartItemProps {

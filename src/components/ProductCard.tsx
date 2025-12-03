@@ -1,5 +1,5 @@
 import React from 'react';
-import { Product } from '../types';
+import { Product } from '@/integrations/supabase/types';
 import { Package } from 'lucide-react';
 
 interface ProductCardProps {

@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { Transaction } from '../types';
+import { Transaction } from '@/integrations/supabase/types';
 import { Printer, CheckCircle, Download } from 'lucide-react';
 
 interface ReceiptModalProps {
