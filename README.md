@@ -116,6 +116,37 @@ LW-Minimart/
 - `npm run lint` - Run ESLint
 - `npx prisma studio` - Open Prisma Studio (database GUI)
 
+### 🖥️ Electron Desktop App
+
+The project can also run as a desktop application using Electron with a local SQLite database.
+
+- `npm run electron` - Launch the Electron app (uses the built web assets by default)
+
+**Recommended dev flow:**
+
+1. In terminal A, start the Vite dev server:
+
+   ```bash
+   $env:ELECTRON_DEV="true"   # PowerShell (optional, marks dev mode for Electron)
+   npm run dev
+   ```
+
+2. In terminal B, from the same project directory, start Electron:
+
+   ```bash
+   $env:ELECTRON_DEV="true"   # PowerShell
+   npm run electron
+   ```
+
+Electron will open a desktop window and load the Vite dev server.
+
+**Production-style test build:**
+
+```bash
+npm run build      # build frontend into dist/
+npm run electron   # launch Electron using the built assets
+```
+
 ## 🔐 Authentication
 
 The application uses Supabase for authentication. Users can:

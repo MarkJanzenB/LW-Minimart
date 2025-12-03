@@ -10,7 +10,6 @@ import {
 } from "lucide-react";
 import logoWithText from "@/assets/lw-logo-with-text.png";
 import logoIcon from "@/assets/lw-logo-icon.png";
-import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
 import {
@@ -44,7 +43,7 @@ export function AppSidebar() {
 
   const handleSignOut = async () => {
     try {
-      await supabase.auth.signOut();
+      await window.api.auth.logout();
       toast({
         title: "Signed out successfully",
         description: "You have been logged out of your account.",
