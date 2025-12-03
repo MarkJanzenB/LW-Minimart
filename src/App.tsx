@@ -11,7 +11,8 @@ import Dashboard from "./pages/Dashboard";
 import Reports from "./pages/Reports";
 import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
-import PosPage from "./pages/POSPage"; 
+import PosPage from "./pages/POSPage";
+import Layout from "./components/Layout"; 
 
 const queryClient = new QueryClient();
 
@@ -26,12 +27,14 @@ const App = () => (
           <Route path="/signin" element={<SignIn />} />
           <Route path="/signup" element={<SignUp />} />
           <Route path="/about" element={<About />} />
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/pos" element={<PosPage />} />
-          <Route path="/inventory" element={<Dashboard />} />
-          <Route path="/cashflow" element={<Dashboard />} />
-          <Route path="/reports" element={<Reports />} />
-          <Route path="/settings" element={<Settings />} />
+          <Route element={<Layout />}>
+            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/pos" element={<PosPage />} />
+            <Route path="/inventory" element={<Dashboard />} />
+            <Route path="/cashflow" element={<Dashboard />} />
+            <Route path="/reports" element={<Reports />} />
+            <Route path="/settings" element={<Settings />} />
+          </Route>
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>

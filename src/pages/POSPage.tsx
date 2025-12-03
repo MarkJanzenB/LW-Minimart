@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Search, Scan, ShoppingCart, CreditCard } from 'lucide-react';
+import { SidebarTrigger } from '@/components/ui/sidebar';
 
 import { Product, CartItem, Transaction, ViewState } from '@/integrations/supabase/types'; 
 import { MOCK_PRODUCTS, TAX_RATE } from '@/constants';
@@ -139,31 +140,31 @@ function PosPage() {
   }, [view, cart]);
 
   return (
-    <div className="h-screen w-screen bg-[#EDE8E6] flex flex-col font-sans text-stone-800 overflow-hidden">
+    <>
       
-      {/* Top Header */}
-      <header className="h-14 bg-[#E5DCD6] flex items-center justify-between px-6 shrink-0 border-b border-stone-300">
-        <div>
-           <h1 className="text-xl font-bold text-stone-900 tracking-tight">LW Mini Mart</h1>
-           <div className="text-[10px] text-stone-600 font-mono space-x-2">
-             <span>F2: Search</span>
-             <span>|</span>
-             <span>F3: Scan</span>
-             <span>|</span>
-             <span>F12: Checkout</span>
-           </div>
+      {/* Header Section */}
+      <div className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-10">
+        <div className="px-8 py-6 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <SidebarTrigger />
+            <div>
+              <h1 className="text-3xl font-bold text-foreground">Point of Sale</h1>
+              <p className="text-muted-foreground mt-1">Create and manage transactions</p>
+            </div>
+          </div>
+          <div className="text-sm text-muted-foreground font-mono space-x-4">
+            <span>F2: Search</span>
+            <span>F3: Scan</span>
+            <span>F12: Checkout</span>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="text-orange-500 font-bold text-xl">◆</span>
-          <span className="font-bold text-2xl text-stone-800 tracking-tight">lifewood</span>
-        </div>
-      </header>
+      </div>
 
       {/* Main Content Area */}
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 flex overflow-hidden h-[calc(100vh-6.5rem)]">
         
         {/* Left Panel: Search & Product Grid */}
-        <div className="flex-1 flex flex-col p-4 pr-2 max-w-[65%]">
+        <div className="flex-1 flex flex-col p-8 pr-2">
            
            {/* Search Bar */}
            <div className="flex gap-2 mb-4">
@@ -173,13 +174,13 @@ function PosPage() {
                  ref={searchInputRef}
                  type="text" 
                  placeholder="Scan barcode or search product..." 
-                 className="w-full pl-12 pr-4 py-3 rounded-lg border border-stone-300 focus:ring-2 focus:ring-orange-200 focus:border-orange-400 outline-none shadow-sm transition-all"
+                 className="w-full pl-12 pr-4 py-3 rounded-lg border border-border bg-card focus:ring-2 focus:ring-ring focus:border-ring outline-none shadow-sm transition-all"
                  value={searchQuery}
                  onChange={(e) => setSearchQuery(e.target.value)}
                  autoFocus
                />
              </div>
-             <button className="px-6 py-2 bg-white border border-stone-300 rounded-lg font-semibold text-stone-600 flex items-center gap-2 hover:bg-stone-50 transition-colors shadow-sm">
+             <button className="px-6 py-2 bg-card border border-border rounded-lg font-semibold text-muted-foreground flex items-center gap-2 hover:bg-muted transition-colors shadow-sm">
                 <Scan size={18} /> Scan
              </button>
            </div>
@@ -203,23 +204,23 @@ function PosPage() {
         </div>
 
         {/* Right Panel: Cart */}
-        <div className="w-[35%] bg-[#FDFBF7] border-l border-stone-200 flex flex-col shadow-xl z-10 relative">
+        <div className="w-[35%] bg-card border-l border-border flex flex-col shadow-xl z-10 relative">
           
           {/* Cart Header */}
-          <div className="p-4 bg-[#F5F0EB] border-b border-stone-200">
+          <div className="p-4 bg-muted/50 border-b border-border">
              <div className="flex items-center gap-3">
-               <div className="bg-[#3E5C48] p-2 rounded-lg text-white">
+               <div className="bg-primary p-2 rounded-lg text-primary-foreground">
                  <ShoppingCart size={20} />
                </div>
                <div>
-                 <h2 className="font-bold text-stone-800">Purchase List</h2>
+                 <h2 className="font-bold text-foreground">Purchase List</h2>
                  <p className="text-xs text-stone-500">{cart.length} items</p>
                </div>
              </div>
           </div>
 
           {/* Cart Items List */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-2 bg-[#FDFBF7]">
+          <div className="flex-1 overflow-y-auto p-4 space-y-2">
             {cart.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-stone-400 space-y-4 opacity-60">
                 <ShoppingCart size={64} />
@@ -239,7 +240,7 @@ function PosPage() {
           </div>
 
           {/* Cart Summary & Actions */}
-          <div className="p-6 bg-white border-t border-stone-200 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+          <div className="p-6 bg-card border-t border-border shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
              <div className="space-y-2 text-sm mb-6">
                <div className="flex justify-between text-stone-500">
                  <span>Subtotal</span>
@@ -250,8 +251,8 @@ function PosPage() {
                  <span>₱{((total / 1.12) * 0.12).toFixed(2)}</span>
                </div>
                <div className="flex justify-between items-end mt-4 pt-4 border-t border-stone-100">
-                 <span className="font-bold text-xl text-stone-800">Total</span>
-                 <span className="font-black text-3xl text-stone-900">₱{total.toFixed(2)}</span>
+                 <span className="font-bold text-xl text-foreground">Total</span>
+                 <span className="font-black text-3xl text-foreground">₱{total.toFixed(2)}</span>
                </div>
              </div>
 
@@ -259,14 +260,14 @@ function PosPage() {
                <button 
                   onClick={() => handleCheckout()}
                   disabled={cart.length === 0}
-                  className="px-4 py-3 border border-stone-300 rounded-lg font-bold text-stone-600 hover:bg-stone-50 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-4 py-3 border border-border rounded-lg font-bold text-muted-foreground hover:bg-muted transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                >
                  <CreditCard size={18} /> Card (F5)
                </button>
                <button 
                   onClick={() => handleCheckout()}
                   disabled={cart.length === 0}
-                  className="px-4 py-3 bg-[#F59E0B] hover:bg-[#D97706] text-white rounded-lg font-bold shadow-md transition-all active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
+                  className="px-4 py-3 bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg font-bold shadow-md transition-all active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
                >
                  <span className="text-lg">💵</span> Cash (F1)
                </button>
@@ -292,7 +293,7 @@ function PosPage() {
         />
       )}
 
-    </div>
+    </>
   );
 }
 export default PosPage;
