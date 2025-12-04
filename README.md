@@ -136,7 +136,17 @@ Authentication is handled locally via Electron IPC and SQLite. User accounts are
 
 On first run, the app seeds two demo accounts:
 
-On first launch with a fresh database, you'll be guided through an **Owner Setup** wizard to create the initial owner username and password. After that, you can create additional cashier or staff users from inside the app (Sign Up) or by modifying the SQLite database directly if needed.
+- **Owner**
+  - Email: `owner@test.com`
+  - Password: `owner123`
+  - Role: `owner`
+
+- **Cashier**
+  - Email: `cashier@test.com`
+  - Password: `cashier123`
+  - Role: `cashier`
+
+You can create additional users from inside the app (Sign Up) or by modifying the SQLite database directly.
 
 ## 💰 Multi-Currency Support
 

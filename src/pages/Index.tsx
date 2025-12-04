@@ -88,18 +88,18 @@ const Index = () => {
   });
 
   useEffect(() => {
-    const checkOwnerOnLoad = async () => {
+    const redirectIfLoggedIn = async () => {
       try {
-        const { hasOwner } = await window.api.auth.hasOwner();
-        if (hasOwner) {
-          navigate("/signin");
+        const { user } = await (window as any).api.auth.getCurrentUser();
+        if (user) {
+          navigate("/dashboard");
         }
       } catch (error) {
-        console.error("Error checking owner state:", error);
+        console.error("Error checking current user on landing:", error);
       }
     };
 
-    checkOwnerOnLoad();
+    redirectIfLoggedIn();
   }, [navigate]);
 
   useEffect(() => {
@@ -148,7 +148,7 @@ const Index = () => {
 
   const handleGetStarted = async () => {
     try {
-      const { hasOwner } = await window.api.auth.hasOwner();
+      const { hasOwner } = await (window as any).api.auth.hasOwner();
       if (!hasOwner) {
         navigate("/owner-setup");
         return;

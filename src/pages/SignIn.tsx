@@ -17,15 +17,15 @@ const SignIn = () => {
   useEffect(() => {
     const checkUserAndOwner = async () => {
       try {
-        const { hasOwner } = await window.api.auth.hasOwner();
+        const { hasOwner } = await (window as any).api.auth.hasOwner();
         if (!hasOwner) {
           navigate("/owner-setup");
           return;
         }
 
-        const { user } = await window.api.auth.getCurrentUser();
+        const { user } = await (window as any).api.auth.getCurrentUser();
         if (user) {
-          navigate("/");
+          navigate("/dashboard");
         }
       } catch (error) {
         console.error("Error checking current user:", error);
@@ -39,7 +39,7 @@ const SignIn = () => {
     setLoading(true);
 
     try {
-      const response = await window.api.auth.login(username, password);
+      const response = await (window as any).api.auth.login(username, password);
 
       if (!response.success) {
         throw new Error(response.message || "Invalid credentials");
@@ -49,7 +49,7 @@ const SignIn = () => {
         title: "Welcome back!",
         description: "You've successfully signed in.",
       });
-      navigate("/");
+      navigate("/dashboard");
     } catch (error: any) {
       toast({
         variant: "destructive",
