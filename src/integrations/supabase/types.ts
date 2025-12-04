@@ -179,6 +179,7 @@ export interface Transaction {
   cashReceived?: number;
   change?: number;
   paymentMethod: 'cash' | 'card';
+  status?: 'Completed' | 'Refunded';
 }
 
 export type ViewState = 'pos' | 'checkout' | 'receipt';
