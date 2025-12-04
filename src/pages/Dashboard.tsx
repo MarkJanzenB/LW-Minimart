@@ -1,9 +1,29 @@
+import { useNavigate } from "react-router-dom";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { TrendingUp, TrendingDown, DollarSign, Package, ShoppingCart, Users } from "lucide-react";
-import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
+import { TrendingUp, TrendingDown, DollarSign, Package, ShoppingCart, Users, ArrowRight } from "lucide-react";
+import {
+  BarChart,
+  Bar,
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+  Legend,
+} from "recharts";
 
 const Dashboard = () => {
+  const navigate = useNavigate();
+
+  const handleProductsClick = () => {
+    navigate('/products');
+  };
   // Sample data for charts
   const salesData = [
     { month: "Jan", sales: 4000 },
@@ -23,14 +43,14 @@ const Dashboard = () => {
 
   const COLORS = ["hsl(160, 84%, 39%)", "hsl(160, 70%, 50%)", "hsl(160, 50%, 60%)", "hsl(160, 30%, 70%)"];
 
-  const revenueData = [
-    { day: "Mon", revenue: 2400 },
-    { day: "Tue", revenue: 1398 },
-    { day: "Wed", revenue: 9800 },
-    { day: "Thu", revenue: 3908 },
-    { day: "Fri", revenue: 4800 },
-    { day: "Sat", revenue: 3800 },
-    { day: "Sun", revenue: 4300 },
+  const financeData = [
+    { day: "Mon", revenue: 2400, expense: 1500, profit: 900 },
+    { day: "Tue", revenue: 3200, expense: 1700, profit: 1500 },
+    { day: "Wed", revenue: 5200, expense: 2600, profit: 2600 },
+    { day: "Thu", revenue: 4800, expense: 2100, profit: 2700 },
+    { day: "Fri", revenue: 6100, expense: 2900, profit: 3200 },
+    { day: "Sat", revenue: 5400, expense: 3000, profit: 2400 },
+    { day: "Sun", revenue: 4700, expense: 2300, profit: 2400 },
   ];
 
   return (
@@ -88,8 +108,14 @@ const Dashboard = () => {
             </Card>
 
             {/* Products Card */}
-            <Card className="border-2 hover:shadow-lg transition-shadow">
-              <CardContent className="pt-6">
+            <Card 
+              className="border-2 hover:shadow-lg transition-all duration-300 transform hover:-translate-y-1 cursor-pointer group"
+              onClick={handleProductsClick}
+            >
+              <CardContent className="pt-6 relative">
+                <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <ArrowRight className="w-4 h-4 text-muted-foreground" />
+                </div>
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm text-muted-foreground font-medium">Products in Stock</p>
@@ -127,7 +153,7 @@ const Dashboard = () => {
           </div>
 
           {/* Charts Section */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
             {/* Sales Trend Chart */}
             <Card className="border-2">
               <CardHeader>
@@ -153,15 +179,15 @@ const Dashboard = () => {
               </CardContent>
             </Card>
 
-            {/* Revenue Trend Chart */}
+            {/* Cash Flow Chart - Income, Expenses & Profit */}
             <Card className="border-2">
               <CardHeader>
-                <CardTitle className="text-lg font-semibold">Revenue Trend</CardTitle>
-                <p className="text-sm text-muted-foreground">Weekly revenue tracking</p>
+                <CardTitle className="text-lg font-semibold">Cash Flow Trends (7 Days)</CardTitle>
+                <p className="text-sm text-muted-foreground">Daily income and expenses overview</p>
               </CardHeader>
               <CardContent>
-                <ResponsiveContainer width="100%" height={300}>
-                  <LineChart data={revenueData}>
+                <ResponsiveContainer width="100%" height={360}>
+                  <LineChart data={financeData} margin={{ top: 10, right: 24, left: 0, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                     <XAxis dataKey="day" stroke="hsl(var(--muted-foreground))" />
                     <YAxis stroke="hsl(var(--muted-foreground))" />
@@ -172,12 +198,34 @@ const Dashboard = () => {
                         borderRadius: "8px"
                       }} 
                     />
-                    <Line 
-                      type="monotone" 
-                      dataKey="revenue" 
-                      stroke="hsl(var(--primary))" 
+                    <Legend verticalAlign="top" height={32} />
+                    <Line
+                      type="monotone"
+                      dataKey="revenue"
+                      name="Income"
+                      stroke="#22c55e"
                       strokeWidth={3}
-                      dot={{ fill: "hsl(var(--primary))", r: 5 }}
+                      dot={{ r: 4 }}
+                      activeDot={{ r: 6 }}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="expense"
+                      name="Expenses"
+                      stroke="#eab308"
+                      strokeWidth={2}
+                      strokeDasharray="6 6"
+                      dot={{ r: 3 }}
+                      activeDot={{ r: 5 }}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="profit"
+                      name="Profit"
+                      stroke="#ef4444"
+                      strokeWidth={2}
+                      dot={{ r: 3 }}
+                      activeDot={{ r: 5 }}
                     />
                   </LineChart>
                 </ResponsiveContainer>

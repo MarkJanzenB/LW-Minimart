@@ -1,0 +1,104 @@
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
+import { TrendingUp } from "lucide-react";
+
+const monthlyCashFlow = [
+  { month: "Jan", operating: 15200, investing: -1500, financing: 2000, net: 15700 },
+  { month: "Feb", operating: 16800, investing: -2000, financing: 1500, net: 16300 },
+  { month: "Mar", operating: 14500, investing: -1800, financing: 3000, net: 15700 },
+  { month: "Apr", operating: 17200, investing: -2200, financing: 2500, net: 17500 },
+  { month: "May", operating: 18900, investing: -2000, financing: 1800, net: 18700 },
+  { month: "Jun", operating: 16260, investing: -2000, financing: 3500, net: 17760 },
+];
+
+const CustomTooltip = ({ active, payload, label }: any) => {
+  if (active && payload && payload.length) {
+    return (
+      <div className="bg-card border border-border rounded-lg shadow-lg p-3">
+        <p className="text-sm font-semibold text-foreground mb-2">{label}</p>
+        {payload.map((entry: any, index: number) => (
+          <p key={index} className="text-sm" style={{ color: entry.color }}>
+            <span className="font-medium">{entry.name}:</span> ${entry.value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </p>
+        ))}
+      </div>
+    );
+  }
+  return null;
+};
+
+export function CashFlowTrendChart() {
+  return (
+    <Card className="border-2">
+      <CardHeader>
+        <div className="flex items-center gap-2">
+          <TrendingUp className="w-5 h-5 text-primary" />
+          <CardTitle className="text-xl font-semibold">Monthly Cash Flow Trends</CardTitle>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <ResponsiveContainer width="100%" height={350}>
+          <AreaChart data={monthlyCashFlow} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+            <defs>
+              <linearGradient id="colorOperating" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="#22c55e" stopOpacity={0.4}/>
+                <stop offset="95%" stopColor="#22c55e" stopOpacity={0}/>
+              </linearGradient>
+              <linearGradient id="colorInvesting" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="#ef4444" stopOpacity={0.3}/>
+                <stop offset="95%" stopColor="#ef4444" stopOpacity={0}/>
+              </linearGradient>
+              <linearGradient id="colorFinancing" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
+                <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+              </linearGradient>
+            </defs>
+            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.3} />
+            <XAxis 
+              dataKey="month" 
+              stroke="hsl(var(--muted-foreground))"
+              style={{ fontSize: '12px' }}
+            />
+            <YAxis 
+              stroke="hsl(var(--muted-foreground))"
+              style={{ fontSize: '12px' }}
+            />
+            <Tooltip content={<CustomTooltip />} />
+            <Legend 
+              wrapperStyle={{ paddingTop: '20px' }}
+              iconType="circle"
+            />
+            <Area
+              type="monotone"
+              dataKey="operating"
+              name="Operating"
+              stackId="1"
+              stroke="#22c55e"
+              strokeWidth={2}
+              fill="url(#colorOperating)"
+            />
+            <Area
+              type="monotone"
+              dataKey="investing"
+              name="Investing"
+              stackId="1"
+              stroke="#ef4444"
+              strokeWidth={2}
+              fill="url(#colorInvesting)"
+            />
+            <Area
+              type="monotone"
+              dataKey="financing"
+              name="Financing"
+              stackId="1"
+              stroke="#3b82f6"
+              strokeWidth={2}
+              fill="url(#colorFinancing)"
+            />
+          </AreaChart>
+        </ResponsiveContainer>
+      </CardContent>
+    </Card>
+  );
+}
+
