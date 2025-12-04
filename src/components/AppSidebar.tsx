@@ -50,7 +50,7 @@ export function AppSidebar() {
   const { open } = useSidebar();
   const currentPath = location.pathname;
 
-    const isActive = (path: string) => {
+  const isActive = (path: string) => {
     if (path === '/pos' && currentPath.startsWith('/pos/')) {
       return true;
     }
@@ -72,20 +72,27 @@ export function AppSidebar() {
   };
 
   return (
-    <Sidebar collapsible="icon" className="border-r border-sidebar-border bg-sidebar">
-      {/* Logo */}
-      <div className="p-6 border-b border-sidebar-border/50">
+    <Sidebar 
+      collapsible="icon" 
+      className="border-r border-sidebar-border bg-sidebar"
+      // 1. Widen the closed state to 5rem (approx 80px)
+      style={{
+        "--sidebar-width-icon": "5rem" 
+      } as React.CSSProperties}
+    >
+      {/* 2. FIX: Dynamic padding. 'p-6' when open, 'py-6' + centered when closed */}
+      <div className={`border-b border-sidebar-border/50 ${open ? "p-6" : "py-6 flex justify-center"}`}>
         {open ? (
           <img src={logoWithText} alt="LW Mini Mart" className="h-8" />
         ) : (
-          <img src={logoIcon} alt="LW Mini Mart" className="h-8 w-8 mx-auto" />
+          <img src={logoIcon} alt="LW Mini Mart" className="h-8 w-8" />
         )}
       </div>
 
-      <SidebarContent className="px-3 py-4">
+      <SidebarContent className="px-3 py-5">
         <SidebarGroup>
           <SidebarGroupContent>
-            <SidebarMenu className="space-y-1">
+            <SidebarMenu className="space-y-3">
               {menuItems.map((item) =>
                 item.subItems ? (
                   <SidebarMenuItem key={item.path} asChild>
@@ -161,7 +168,8 @@ export function AppSidebar() {
             >
               <div className="flex items-center gap-3 px-3 py-2.5 rounded-lg w-full">
                 <LogOut className="w-5 h-5" />
-                <span className="font-medium">Sign Out</span>
+                {/* 3. FIX: Hide text when closed to prevent overflow */}
+                {open && <span className="font-medium">Sign Out</span>}
               </div>
             </SidebarMenuButton>
           </SidebarMenuItem>
