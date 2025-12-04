@@ -68,7 +68,7 @@ function PosPage() {
     if (cart.length > 0) setView('checkout');
   };
 
-  const finalizeTransaction = (amountReceived: number, method: 'cash' | 'card') => {
+  const finalizeTransaction = (amountReceived: number, method: 'cash' | 'qr', referenceNumber?: string) => {
     const newTransaction: Transaction = {
       id: Date.now().toString(),
       date: new Date(),
@@ -76,9 +76,10 @@ function PosPage() {
       subtotal,
       tax,
       total,
-      cashReceived: amountReceived,
-      change: amountReceived - total,
-      paymentMethod: method
+      cashReceived: method === 'cash' ? amountReceived : undefined,
+      change: method === 'cash' ? amountReceived - total : undefined,
+      paymentMethod: method,
+      referenceNumber: method === 'qr' ? referenceNumber : undefined
     };
     setTransaction(newTransaction);
     setView('receipt');

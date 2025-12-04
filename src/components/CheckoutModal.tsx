@@ -1,19 +1,19 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { CreditCard, Banknote, Printer, X } from 'lucide-react';
-import { CartItem } from '../types';
+import { Banknote, Printer, QrCode } from 'lucide-react';
 
 interface CheckoutModalProps {
   total: number;
-  onConfirm: (amountReceived: number, method: 'cash' | 'card') => void;
+  onConfirm: (amountReceived: number, method: 'cash' | 'qr', referenceNumber?: string) => void;
   onCancel: () => void;
 }
 
 const CheckoutModal: React.FC<CheckoutModalProps> = ({ total, onConfirm, onCancel }) => {
-  const [method, setMethod] = useState<'cash' | 'card'>('cash');
+  const [method, setMethod] = useState<'cash' | 'qr'>('cash');
   const [cashRecieved, setCashRecieved] = useState<string>('');
+  const [referenceNumber, setReferenceNumber] = useState<string>('');
   const inputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
+  useEffect(() => {  
     if (inputRef.current) {
       inputRef.current.focus();
     }
@@ -23,7 +23,7 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ total, onConfirm, onCance
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onCancel();
-      if (e.key === 'F1') setMethod('card');
+      if (e.key === 'F1') setMethod('qr');
       if (e.key === 'F5') setMethod('cash');
       if (e.key === 'Enter') {
         handlePayment();
@@ -31,14 +31,22 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ total, onConfirm, onCance
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [cashRecieved, method, total]);
+  }, [cashRecieved, referenceNumber, method, total]);
 
   const change = method === 'cash' ? Math.max(0, parseFloat(cashRecieved || '0') - total) : 0;
-  const isSufficient = method === 'card' || (parseFloat(cashRecieved || '0') >= total);
+  const isCashSufficient = parseFloat(cashRecieved || '0') >= total;
+  const isQrReady = referenceNumber.trim().length > 0;
+  const isSufficient = method === 'cash' ? isCashSufficient : isQrReady;
 
   const handlePayment = () => {
-    if (isSufficient) {
-      onConfirm(parseFloat(cashRecieved || '0'), method);
+    if (!isSufficient) {
+      return;
+    }
+
+    if (method === 'cash') {
+      onConfirm(parseFloat(cashRecieved || '0'), 'cash');
+    } else {
+      onConfirm(total, 'qr', referenceNumber.trim());
     }
   };
 
@@ -73,10 +81,10 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ total, onConfirm, onCance
                  <Banknote /> Cash (F5)
                </button>
                <button 
-                 onClick={() => setMethod('card')}
-                 className={`flex-1 flex items-center justify-center gap-2 py-4 rounded-lg text-lg font-bold transition-all duration-200 ${method === 'card' ? 'bg-white shadow-md text-stone-800' : 'text-stone-400 hover:text-stone-600'}`}
+                 onClick={() => setMethod('qr')}
+                 className={`flex-1 flex items-center justify-center gap-2 py-4 rounded-lg text-lg font-bold transition-all duration-200 ${method === 'qr' ? 'bg-white shadow-md text-stone-800' : 'text-stone-400 hover:text-stone-600'}`}
                >
-                 <CreditCard /> Card (F1)
+                 <QrCode /> QR Code (F1)
                </button>
             </div>
 
@@ -94,13 +102,27 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ total, onConfirm, onCance
               </div>
             )}
 
+            {method === 'qr' && (
+              <div className="mb-8 animate-in slide-in-from-top-4 duration-300">
+                <label className="block text-stone-600 font-semibold mb-2">Reference Number</label>
+                <input 
+                  ref={inputRef}
+                  type="text" 
+                  value={referenceNumber}
+                  onChange={(e) => setReferenceNumber(e.target.value)}
+                  placeholder="Enter reference number from QR payment"
+                  className="w-full text-2xl p-4 bg-white border border-stone-200 rounded-xl focus:ring-4 focus:ring-orange-100 focus:border-orange-400 outline-none transition-all font-mono"
+                />
+              </div>
+            )}
+
             <div className={`p-8 rounded-xl mb-8 transition-colors duration-300 ${isSufficient ? 'bg-[#3E5C48] text-white' : 'bg-red-50 text-red-500'}`}>
               <div className="flex justify-between items-end">
                 <span className="text-lg font-medium opacity-80">
                   {method === 'cash' ? 'Change Due' : 'Status'}
                 </span>
                 <span className="text-5xl font-bold font-mono">
-                  {method === 'cash' ? `₱${change.toFixed(2)}` : 'Ready'}
+                  {method === 'cash' ? `₱${change.toFixed(2)}` : (isSufficient ? 'Ready' : 'Enter reference')}
                 </span>
               </div>
             </div>

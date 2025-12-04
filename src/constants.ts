@@ -137,7 +137,8 @@ export const MOCK_TRANSACTIONS: Transaction[] = [
     subtotal: 9.24,
     tax: 1.11,
     total: 10.35,
-    paymentMethod: 'card',
+    paymentMethod: 'qr',
+    referenceNumber: 'QR-20230115-002',
     status: 'Completed',
   },
   {
