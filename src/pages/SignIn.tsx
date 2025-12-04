@@ -8,24 +8,30 @@ import { useToast } from "@/hooks/use-toast";
 import logo from "@/assets/lw-mini-mart-logo.png";
 
 const SignIn = () => {
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
 
   useEffect(() => {
-    const checkUser = async () => {
+    const checkUserAndOwner = async () => {
       try {
-        const { user } = await window.api.auth.getCurrentUser();
+        const { hasOwner } = await (window as any).api.auth.hasOwner();
+        if (!hasOwner) {
+          navigate("/owner-setup");
+          return;
+        }
+
+        const { user } = await (window as any).api.auth.getCurrentUser();
         if (user) {
-          navigate("/");
+          navigate("/dashboard");
         }
       } catch (error) {
         console.error("Error checking current user:", error);
       }
     };
-    checkUser();
+    checkUserAndOwner();
   }, [navigate]);
 
   const handleSignIn = async (e: React.FormEvent) => {
@@ -33,7 +39,7 @@ const SignIn = () => {
     setLoading(true);
 
     try {
-      const response = await window.api.auth.login(email, password);
+      const response = await (window as any).api.auth.login(username, password);
 
       if (!response.success) {
         throw new Error(response.message || "Invalid credentials");
@@ -43,12 +49,12 @@ const SignIn = () => {
         title: "Welcome back!",
         description: "You've successfully signed in.",
       });
-      navigate("/");
+      navigate("/dashboard");
     } catch (error: any) {
       toast({
         variant: "destructive",
         title: "Error signing in",
-        description: error.message || "Invalid email or password",
+        description: error.message || "Invalid username or password",
       });
     } finally {
       setLoading(false);
@@ -104,15 +110,15 @@ const SignIn = () => {
           {/* Form */}
           <form onSubmit={handleSignIn} className="space-y-6">
             <div className="space-y-2">
-              <Label htmlFor="email" className="text-sm text-muted-foreground">
-                Username or Email Address
+              <Label htmlFor="username" className="text-sm text-muted-foreground">
+                Username
               </Label>
               <Input
-                id="email"
-                type="email"
-                placeholder="name@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                id="username"
+                type="text"
+                placeholder="owner01"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
                 required
                 className="h-12 bg-muted border-0 rounded-lg"
               />

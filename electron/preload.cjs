@@ -8,5 +8,8 @@ contextBridge.exposeInMainWorld("api", {
     logout: () => ipcRenderer.invoke("auth:logout"),
     register: (username, password, role) =>
       ipcRenderer.invoke("auth:register", { username, password, role }),
+    hasOwner: () => ipcRenderer.invoke("auth:hasOwner"),
+    initializeOwner: (username, password) =>
+      ipcRenderer.invoke("auth:initializeOwner", { username, password }),
   },
 });

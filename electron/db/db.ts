@@ -1,12 +1,22 @@
-import sqlite3 from 'sqlite3';
-import path from 'path';
+import Database from "better-sqlite3";
+import { join } from "path";
+import { readFileSync, mkdirSync } from "fs";
 
-const dbPath = path.resolve(__dirname, '..', '..', 'db.sqlite');
+const dbDir = __dirname;
+mkdirSync(dbDir, { recursive: true });
+export const dbPath = join(dbDir, "store.db");
 
-export const db = new sqlite3.Database(dbPath, (err) => {
-  if (err) {
-    console.error('Could not connect to database', err);
-  } else {
-    console.log('Connected to database');
+export const db = new Database(dbPath);
+
+db.pragma("journal_mode = WAL");
+db.pragma("foreign_keys = ON");
+
+try {
+  const schemaPath = join(dbDir, "schema.sql");
+  const schema = readFileSync(schemaPath, "utf-8");
+  if (schema && schema.trim().length > 0) {
+    db.exec(schema);
   }
-});
+} catch (e) {
+  console.error("Failed to apply database schema:", e);
+}

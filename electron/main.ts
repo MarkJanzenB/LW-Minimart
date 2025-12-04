@@ -1,21 +1,10 @@
 import { app, BrowserWindow } from "electron";
 import { join } from "path";
-import Database from "better-sqlite3";
 import { registerAuthIpc } from "./ipc/auth";
+import { db } from "./db/db";
+import "./ipc/products";
 
 let mainWindow: BrowserWindow | null = null;
-
-const dbPath = join(__dirname, "db", "store.db");
-const db = new Database(dbPath);
-
-db.exec(`
-  CREATE TABLE IF NOT EXISTS users (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    username TEXT UNIQUE,
-    password TEXT,
-    role TEXT CHECK(role IN ('owner','cashier'))
-  );
-`);
 
 const userCount = db.prepare("SELECT COUNT(*) as count FROM users").get() as { count: number };
 if (userCount.count === 0) {
