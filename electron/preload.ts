@@ -8,6 +8,9 @@ contextBridge.exposeInMainWorld("api", {
     logout: () => ipcRenderer.invoke("auth:logout"),
     register: (username: string, password: string, role?: "owner" | "cashier") =>
       ipcRenderer.invoke("auth:register", { username, password, role }),
+    hasOwner: () => ipcRenderer.invoke("auth:hasOwner"),
+    initializeOwner: (username: string, password: string) =>
+      ipcRenderer.invoke("auth:initializeOwner", { username, password }),
   },
 });
 
@@ -22,6 +25,11 @@ declare global {
           username: string,
           password: string,
           role?: "owner" | "cashier"
+        ): Promise<{ success: boolean; message?: string }>;
+        hasOwner(): Promise<{ hasOwner: boolean }>;
+        initializeOwner(
+          username: string,
+          password: string
         ): Promise<{ success: boolean; message?: string }>;
       };
     };

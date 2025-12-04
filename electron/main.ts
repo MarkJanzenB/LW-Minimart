@@ -29,6 +29,16 @@ if (productCount.count === 0) {
   });
 
   seedTransaction(products);
+import { db } from "./db/db";
+import "./ipc/products";
+
+let mainWindow: BrowserWindow | null = null;
+
+const userCount = db.prepare("SELECT COUNT(*) as count FROM users").get() as { count: number };
+if (userCount.count === 0) {
+  const insert = db.prepare("INSERT INTO users (username, password, role) VALUES (?, ?, ?)");
+  insert.run("owner@test.com", "owner123", "owner");
+  insert.run("cashier@test.com", "cashier123", "cashier");
 }
 
 // Initialize IPC handlers

@@ -89,4 +89,6 @@ export function recordSale(transaction: Transaction) {
     console.error('Error recording sale', err);
     throw err;
   }
+  const stmt = db.prepare('SELECT * FROM products');
+  return stmt.all();
 }
