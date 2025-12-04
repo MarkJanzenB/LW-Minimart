@@ -290,7 +290,7 @@ function PosPage() {
                   key={product.id} 
                   ref={el => productItemsRef.current[index] = el}
                   tabIndex={-1}
-                  className={`rounded-lg focus:outline-none focus:ring-2 ${activeList === 'products' && selectedProductIndex === index ? 'ring-earth-yellow' : 'ring-transparent'} flex flex-col`}
+                  className={`rounded-lg focus:outline-none focus:ring-2 m-1 ${activeList === 'products' && selectedProductIndex === index ? 'ring-earth-yellow' : 'ring-transparent'} flex flex-col`}
                   onClick={() => addToCart(product)}
                 >
                   <ProductCard product={product} onClick={() => {}} />
