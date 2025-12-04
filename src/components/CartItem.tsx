@@ -7,11 +7,12 @@ interface CartItemProps {
   onIncrement: (id: string) => void;
   onDecrement: (id: string) => void;
   onRemove: (id: string) => void;
+  isSelected: boolean;
 }
 
-const CartItem: React.FC<CartItemProps> = ({ item, onIncrement, onDecrement, onRemove }) => {
+const CartItem: React.FC<CartItemProps> = ({ item, onIncrement, onDecrement, onRemove, isSelected }) => {
   return (
-    <div className="flex items-center p-3 bg-white rounded-lg border border-stone-100 mb-2 shadow-sm animate-in slide-in-from-right-2 duration-300">
+    <div className={`flex items-center p-3 rounded-lg border mb-2 shadow-sm transition-all duration-200 ${isSelected ? 'bg-blue-50 border-blue-200 ring-2 ring-blue-300' : 'bg-white border-stone-100'}`}>
       <div className={`w-12 h-12 ${item.color || 'bg-stone-100'} rounded-md flex items-center justify-center mr-3 shrink-0`}>
          <Package className="w-6 h-6 text-stone-400 opacity-50" />
       </div>
