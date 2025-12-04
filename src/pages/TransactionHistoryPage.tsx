@@ -67,6 +67,7 @@ function TransactionHistoryPage() {
             <tr>
               <th className="p-4 font-medium">Transaction ID</th>
               <th className="p-4 font-medium">Reference No.</th>
+              <th className="p-4 font-medium">Payment</th>
               <th className="p-4 font-medium">Date</th>
               <th className="p-4 font-medium">Items</th>
               <th className="p-4 font-medium text-right">Total</th>
@@ -79,6 +80,11 @@ function TransactionHistoryPage() {
               <tr key={t.id} className="border-b border-border last:border-b-0 hover:bg-muted/30">
                 <td className="p-4 font-mono text-xs">{t.id}</td>
                 <td className="p-4 font-mono text-xs">{t.referenceNumber || '-'}</td>
+                <td className="p-4">
+                  <span className={`px-2 py-1 text-xs rounded-full font-medium ${t.paymentMethod === 'cash' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}`}>
+                    {t.paymentMethod === 'cash' ? 'Cash' : 'QR'}
+                  </span>
+                </td>
                 <td className="p-4 text-muted-foreground">{new Date(t.date).toLocaleString()}</td>
                 <td className="p-4 text-muted-foreground">{t.items.reduce((sum, i) => sum + i.quantity, 0)}</td>
                 <td className="p-4 font-semibold text-right">₱{t.total.toFixed(2)}</td>
