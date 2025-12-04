@@ -7,15 +7,15 @@ CREATE TABLE IF NOT EXISTS users (
   role TEXT CHECK(role IN ('owner','cashier'))
 );
 
-- 1. Basic reference tables
-CREATE TABLE categories (
+-- 1. Basic reference tables
+CREATE TABLE IF NOT EXISTS categories (
                             id INTEGER PRIMARY KEY AUTOINCREMENT,
                             name TEXT NOT NULL UNIQUE,
                             description TEXT,
                             created_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE suppliers (
+CREATE TABLE IF NOT EXISTS suppliers (
                            id INTEGER PRIMARY KEY AUTOINCREMENT,
                            name TEXT NOT NULL,
                            contact_name TEXT,
@@ -26,14 +26,14 @@ CREATE TABLE suppliers (
                            created_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE units (
+CREATE TABLE IF NOT EXISTS units (
                        id INTEGER PRIMARY KEY AUTOINCREMENT,
                        code TEXT NOT NULL UNIQUE,
                        name TEXT NOT NULL
 );
 
 
-CREATE TABLE products (
+CREATE TABLE IF NOT EXISTS products (
                           id INTEGER PRIMARY KEY AUTOINCREMENT,
                           sku TEXT UNIQUE,
                           barcode TEXT UNIQUE,
@@ -52,10 +52,10 @@ CREATE TABLE products (
                           FOREIGN KEY (unit_id) REFERENCES units(id)
 );
 
-CREATE INDEX idx_products_category ON products(category_id);
+CREATE INDEX IF NOT EXISTS idx_products_category ON products(category_id);
 
 
-CREATE TABLE batches (
+CREATE TABLE IF NOT EXISTS batches (
                          id INTEGER PRIMARY KEY AUTOINCREMENT,
                          product_id INTEGER NOT NULL,
                          batch_code TEXT,
@@ -68,10 +68,10 @@ CREATE TABLE batches (
                          FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
 );
 
-CREATE INDEX idx_batches_product ON batches(product_id);
-CREATE INDEX idx_batches_expiry ON batches(expiry_date);
+CREATE INDEX IF NOT EXISTS idx_batches_product ON batches(product_id);
+CREATE INDEX IF NOT EXISTS idx_batches_expiry ON batches(expiry_date);
 
-CREATE TABLE low_stock_alerts (
+CREATE TABLE IF NOT EXISTS low_stock_alerts (
                                   id INTEGER PRIMARY KEY AUTOINCREMENT,
                                   product_id INTEGER,
                                   threshold INTEGER NOT NULL,
