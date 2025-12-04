@@ -160,9 +160,11 @@ export interface Product {
   code: string;
   price: number;
   stock: number;
+  stock_quantity?: number;
   category: string;
   image?: string;
   color?: string;
+  barcode?: string;
 }
 
 export interface CartItem extends Product {
