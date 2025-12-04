@@ -14,6 +14,7 @@ function PosPage() {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [transaction, setTransaction] = useState<Transaction | null>(null);
+  const [selectedCartItemIndex, setSelectedCartItemIndex] = useState<number | null>(null);
   
   const searchInputRef = useRef<HTMLInputElement>(null);
 
@@ -32,17 +33,18 @@ function PosPage() {
   // Cart Actions
   const addToCart = (product: Product) => {
     setCart(prev => {
-      const existing = prev.find(item => item.id === product.id);
-      if (existing) {
-        return prev.map(item => 
-          item.id === product.id 
+      const existingIndex = prev.findIndex(item => item.id === product.id);
+      if (existingIndex !== -1) {
+        setSelectedCartItemIndex(existingIndex);
+        return prev.map((item, index) => 
+          index === existingIndex 
             ? { ...item, quantity: item.quantity + 1 } 
             : item
         );
       }
+      setSelectedCartItemIndex(prev.length);
       return [...prev, { ...product, quantity: 1 }];
     });
-    // Play beep sound (simulated)
     playBeep();
   };
 
@@ -115,8 +117,24 @@ function PosPage() {
   };
 
   // Keyboard Shortcuts
+  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && filteredProducts.length > 0) {
+      e.preventDefault();
+      addToCart(filteredProducts[0]);
+      setSearchQuery('');
+      searchInputRef.current?.blur();
+    }
+  };
+
   useEffect(() => {
     const handleGlobalKeys = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+          // Allow arrow keys to navigate search results or text, so don't preventDefault
+        } else {
+          // return; // Don't process other shortcuts if inside an input
+        }
+      }
       // F2: Search
       if (e.key === 'F2') {
         e.preventDefault();
@@ -143,11 +161,33 @@ function PosPage() {
         e.preventDefault();
         if (view === 'pos' && cart.length > 0) handleCheckout();
       }
+
+      // Arrow navigation for cart
+      if (cart.length > 0) {
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          setSelectedCartItemIndex(prev => (prev === null || prev === cart.length - 1) ? 0 : prev + 1);
+          searchInputRef.current?.blur();
+        }
+        if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          setSelectedCartItemIndex(prev => (prev === null || prev === 0) ? cart.length - 1 : prev - 1);
+          searchInputRef.current?.blur();
+        }
+        if (e.key === 'ArrowRight' && selectedCartItemIndex !== null) {
+          e.preventDefault();
+          updateQuantity(cart[selectedCartItemIndex].id, 1);
+        }
+        if (e.key === 'ArrowLeft' && selectedCartItemIndex !== null) {
+          e.preventDefault();
+          updateQuantity(cart[selectedCartItemIndex].id, -1);
+        }
+      }
     };
 
     window.addEventListener('keydown', handleGlobalKeys);
     return () => window.removeEventListener('keydown', handleGlobalKeys);
-  }, [view, cart]);
+  }, [view, cart, selectedCartItemIndex]);
 
   return (
     <>
@@ -188,6 +228,7 @@ function PosPage() {
                  className="w-full pl-12 pr-4 py-3 rounded-lg border border-border bg-card focus:ring-2 focus:ring-ring focus:border-ring outline-none shadow-sm transition-all"
                  value={searchQuery}
                  onChange={(e) => setSearchQuery(e.target.value)}
+                 onKeyDown={handleSearchKeyDown}
                  autoFocus
                />
              </div>
@@ -236,13 +277,14 @@ function PosPage() {
                 <p className="text-sm">Cart is empty</p>
               </div>
             ) : (
-              cart.map(item => (
+              cart.map((item, index) => (
                 <CartItemComponent 
                   key={item.id} 
                   item={item} 
                   onIncrement={() => addToCart(item)}
                   onDecrement={() => updateQuantity(item.id, -1)}
                   onRemove={() => removeFromCart(item.id)}
+                  isSelected={selectedCartItemIndex === index}
                 />
               ))
             )}
