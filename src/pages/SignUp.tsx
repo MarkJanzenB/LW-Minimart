@@ -7,7 +7,7 @@ import { useToast } from "@/hooks/use-toast";
 import logo from "@/assets/lw-mini-mart-logo.png";
 
 const SignUp = () => {
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -15,8 +15,14 @@ const SignUp = () => {
   const { toast } = useToast();
 
   useEffect(() => {
-    const checkUser = async () => {
+    const checkUserAndOwner = async () => {
       try {
+        const { hasOwner } = await window.api.auth.hasOwner();
+        if (!hasOwner) {
+          navigate("/owner-setup");
+          return;
+        }
+
         const { user } = await window.api.auth.getCurrentUser();
         if (user) {
           navigate("/");
@@ -25,7 +31,7 @@ const SignUp = () => {
         console.error("Error checking current user:", error);
       }
     };
-    checkUser();
+    checkUserAndOwner();
   }, [navigate]);
 
   const handleSignUp = async (e: React.FormEvent) => {
@@ -52,7 +58,7 @@ const SignUp = () => {
     setLoading(true);
 
     try {
-      const response = await window.api.auth.register(email, password);
+      const response = await window.api.auth.register(username, password);
 
       if (!response.success) {
         throw new Error(response.message || "Unable to create account");
@@ -115,15 +121,15 @@ const SignUp = () => {
           {/* Form */}
           <form onSubmit={handleSignUp} className="space-y-6">
             <div className="space-y-2">
-              <Label htmlFor="email" className="text-sm text-muted-foreground">
-                Email Address
+              <Label htmlFor="username" className="text-sm text-muted-foreground">
+                Username
               </Label>
               <Input
-                id="email"
-                type="email"
-                placeholder="name@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                id="username"
+                type="text"
+                placeholder="owner01"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
                 required
                 className="h-12 bg-muted border-0 rounded-lg"
               />
