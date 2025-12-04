@@ -13,6 +13,7 @@ import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
 import PosPage from "./pages/POSPage";
 import Layout from "./components/Layout"; 
+import OwnerSetup from "./pages/OwnerSetup";
 
 const queryClient = new QueryClient();
 
@@ -26,6 +27,7 @@ const App = () => (
           <Route path="/" element={<Index />} />
           <Route path="/signin" element={<SignIn />} />
           <Route path="/signup" element={<SignUp />} />
+          <Route path="/owner-setup" element={<OwnerSetup />} />
           <Route path="/about" element={<About />} />
           <Route element={<Layout />}>
             <Route path="/dashboard" element={<Dashboard />} />

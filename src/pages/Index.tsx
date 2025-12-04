@@ -88,18 +88,18 @@ const Index = () => {
   });
 
   useEffect(() => {
-    const checkUser = async () => {
+    const checkOwnerOnLoad = async () => {
       try {
-        const { user } = await window.api.auth.getCurrentUser();
-        if (user) {
-          navigate("/dashboard");
+        const { hasOwner } = await window.api.auth.hasOwner();
+        if (hasOwner) {
+          navigate("/signin");
         }
       } catch (error) {
-        console.error("Error checking current user:", error);
+        console.error("Error checking owner state:", error);
       }
     };
 
-    checkUser();
+    checkOwnerOnLoad();
   }, [navigate]);
 
   useEffect(() => {
@@ -143,6 +143,21 @@ const Index = () => {
       }
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleGetStarted = async () => {
+    try {
+      const { hasOwner } = await window.api.auth.hasOwner();
+      if (!hasOwner) {
+        navigate("/owner-setup");
+        return;
+      }
+
+      navigate("/signin");
+    } catch (error) {
+      console.error("Error handling get started:", error);
+      navigate("/signin");
     }
   };
 
@@ -195,7 +210,7 @@ const Index = () => {
               <Button 
                 size="lg" 
                 className="bg-primary hover:bg-primary/90 text-primary-foreground text-base px-8 h-12 rounded-xl font-medium shadow-sm hover:shadow-md transition-all duration-200"
-                onClick={() => navigate("/signin")}
+                onClick={handleGetStarted}
               >
                 Get Started
               </Button>
@@ -635,7 +650,7 @@ const Index = () => {
 
                 <Button 
                   className="bg-primary hover:bg-primary/90 text-primary-foreground px-6 h-11 rounded-xl font-medium"
-                  onClick={() => navigate("/signin")}
+                  onClick={handleGetStarted}
                 >
                   Get Started →
                 </Button>

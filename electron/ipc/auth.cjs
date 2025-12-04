@@ -41,6 +41,40 @@ function registerAuthIpc(db) {
 
     return { success: true };
   });
+
+  ipcMain.handle("auth:hasOwner", () => {
+    const owner = db
+      .prepare("SELECT id FROM users WHERE role = 'owner' LIMIT 1")
+      .get();
+
+    return { hasOwner: !!owner };
+  });
+
+  ipcMain.handle("auth:initializeOwner", (_event, { username, password }) => {
+    const owner = db
+      .prepare("SELECT id FROM users WHERE role = 'owner' LIMIT 1")
+      .get();
+
+    if (owner) {
+      return { success: false, message: "Owner already exists" };
+    }
+
+    const existingUsername = db
+      .prepare("SELECT id FROM users WHERE username = ?")
+      .get(username);
+
+    if (existingUsername) {
+      return { success: false, message: "Username already in use" };
+    }
+
+    const insert = db.prepare(
+      "INSERT INTO users (username, password, role) VALUES (?, ?, 'owner')"
+    );
+
+    insert.run(username, password);
+
+    return { success: true };
+  });
 }
 
 module.exports = { registerAuthIpc };
