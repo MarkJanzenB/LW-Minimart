@@ -180,7 +180,8 @@ export interface Transaction {
   total: number;
   cashReceived?: number;
   change?: number;
-  paymentMethod: 'cash' | 'card';
+  paymentMethod: 'cash' | 'qr';
+  referenceNumber?: string;
   status?: 'Completed' | 'Refunded';
 }
 
