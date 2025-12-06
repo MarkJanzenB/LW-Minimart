@@ -1,6 +1,7 @@
 import React from 'react';
 import { CartItem as CartItemType } from '@/integrations/supabase/types';
 import { Plus, Minus, Trash2, Package } from 'lucide-react';
+import { formatCurrency } from '@/hooks/use-currency';
 
 interface CartItemProps {
   item: CartItemType;
@@ -19,7 +20,7 @@ const CartItem: React.FC<CartItemProps> = ({ item, onIncrement, onDecrement, onR
       
       <div className="flex-1 min-w-0 mr-4">
         <h4 className="font-semibold text-stone-800 text-sm truncate">{item.name}</h4>
-        <p className="text-xs text-stone-500">₱{item.price.toFixed(2)} each</p>
+        <p className="text-xs text-stone-500">{formatCurrency(item.price)} each</p>
       </div>
 
       <div className="flex items-center gap-3">
@@ -40,7 +41,7 @@ const CartItem: React.FC<CartItemProps> = ({ item, onIncrement, onDecrement, onR
         </div>
         
         <div className="text-right min-w-[60px]">
-          <div className="font-bold text-stone-800">₱{(item.price * item.quantity).toFixed(2)}</div>
+          <div className="font-bold text-stone-800">{formatCurrency(item.price * item.quantity)}</div>
           <button 
             onClick={() => onRemove(item.id)}
             className="text-red-400 hover:text-red-600 text-xs flex items-center justify-end w-full mt-1 gap-1"

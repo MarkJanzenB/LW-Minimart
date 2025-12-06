@@ -1,8 +1,7 @@
 import { useState } from "react";
-import { AppSidebar } from "@/components/AppSidebar";
-import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { TrendingUp, TrendingDown, Package, AlertTriangle, Clock, DollarSign, Layers, Download, Calendar } from "lucide-react";
+import { TrendingUp, TrendingDown, Package, AlertTriangle, Clock, DollarSign, Layers, Download, Calendar, FileText } from "lucide-react";
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from "recharts";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -63,9 +62,9 @@ const Reports = () => {
   ];
 
   const COLORS = {
-    fast: "hsl(var(--primary))",
-    medium: "hsl(var(--accent))",
-    slow: "hsl(var(--destructive))",
+    fast: "#133020",
+    medium: "#FFB347",
+    slow: "#FFC370",
   };
 
   const handleExportPDF = () => {
@@ -79,24 +78,21 @@ const Reports = () => {
   };
 
   return (
-    <SidebarProvider>
-      <div className="flex h-screen w-full bg-background overflow-hidden">
-        <AppSidebar />
-        <main className="flex-1 overflow-y-auto">
-          {/* Header Section */}
-          <div className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-10">
-            <div className="px-8 py-6">
-              <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-                <div className="flex items-center gap-4">
-                  <SidebarTrigger />
-                  <div>
-                    <h1 className="text-3xl font-bold text-foreground">Advanced Reports & Analytics</h1>
-                    <p className="text-muted-foreground mt-1">Deep insights into profitability, inventory performance, and predictive analytics</p>
-                  </div>
-                </div>
-              
-              {/* Action Buttons */}
-              <div className="flex items-center gap-3">
+    <>
+      {/* Header Section */}
+      <div className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-10">
+        <div className="px-8 py-6 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <SidebarTrigger />
+            <FileText className="w-5 h-5 text-foreground" />
+            <div>
+              <h1 className="text-3xl font-bold text-foreground">Advanced Reports & Analytics</h1>
+              <p className="text-muted-foreground mt-1">Deep insights into profitability, inventory performance, and predictive analytics</p>
+            </div>
+          </div>
+          
+          {/* Action Buttons */}
+          <div className="flex items-center gap-3">
                 <Popover>
                   <PopoverTrigger asChild>
                     <Button variant="outline" className="justify-start text-left font-normal">
@@ -144,9 +140,8 @@ const Reports = () => {
               </div>
             </div>
           </div>
-        </div>
 
-        <div className="p-8 space-y-8">
+          <div className="p-8 space-y-6 max-w-7xl mx-auto">
           {/* Period Comparison Toggle */}
           <Card className="border-2">
             <CardContent className="pt-6">
@@ -200,8 +195,8 @@ const Reports = () => {
                         }} 
                       />
                       <Legend />
-                      <Bar dataKey="profit" fill="hsl(var(--primary))" name="Current Period" radius={[4, 4, 0, 0]} />
-                      <Bar dataKey="prevProfit" fill="hsl(var(--accent))" name="Previous Period" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="profit" fill="#133020" name="Current Period" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="prevProfit" fill="#FFB347" name="Previous Period" radius={[4, 4, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 </CardContent>
@@ -378,9 +373,34 @@ const Reports = () => {
                         }} 
                       />
                       <Legend />
-                      <Line type="monotone" dataKey="actualSales" stroke="hsl(var(--primary))" strokeWidth={2} name="Current Actual" />
-                      <Line type="monotone" dataKey="prevActualSales" stroke="hsl(var(--accent))" strokeWidth={2} strokeDasharray="5 5" name="Previous Actual" />
-                      <Line type="monotone" dataKey="lostSales" stroke="hsl(var(--destructive))" strokeWidth={2} name="Lost Revenue" />
+                      <Line 
+                        type="monotone" 
+                        dataKey="actualSales" 
+                        stroke="#133020" 
+                        strokeWidth={3} 
+                        name="Current Actual"
+                        dot={{ fill: "#133020", r: 6, strokeWidth: 0 }}
+                        activeDot={{ r: 8, fill: "#133020" }}
+                      />
+                      <Line 
+                        type="monotone" 
+                        dataKey="prevActualSales" 
+                        stroke="#FFB347" 
+                        strokeWidth={3} 
+                        strokeDasharray="5 5" 
+                        name="Previous Actual"
+                        dot={{ fill: "#FFB347", r: 6, strokeWidth: 0 }}
+                        activeDot={{ r: 8, fill: "#FFB347" }}
+                      />
+                      <Line 
+                        type="monotone" 
+                        dataKey="lostSales" 
+                        stroke="#FFC370" 
+                        strokeWidth={3} 
+                        name="Lost Revenue"
+                        dot={{ fill: "#FFC370", r: 6, strokeWidth: 0 }}
+                        activeDot={{ r: 8, fill: "#FFC370" }}
+                      />
                     </LineChart>
                   </ResponsiveContainer>
                 </CardContent>
@@ -464,18 +484,20 @@ const Reports = () => {
                       <Line 
                         type="monotone" 
                         dataKey="current" 
-                        stroke="hsl(var(--primary))" 
+                        stroke="#133020" 
                         strokeWidth={3}
-                        dot={{ fill: "hsl(var(--primary))", r: 5 }}
+                        dot={{ fill: "#133020", r: 6, strokeWidth: 0 }}
+                        activeDot={{ r: 8, fill: "#133020" }}
                         name="Current Stock"
                       />
                       <Line 
                         type="monotone" 
                         dataKey="predicted" 
-                        stroke="hsl(var(--accent))" 
+                        stroke="#FFB347" 
                         strokeWidth={3}
                         strokeDasharray="5 5"
-                        dot={{ fill: "hsl(var(--accent))", r: 5 }}
+                        dot={{ fill: "#FFB347", r: 6, strokeWidth: 0 }}
+                        activeDot={{ r: 8, fill: "#FFB347" }}
                         name="Predicted Stock"
                       />
                     </LineChart>
@@ -485,9 +507,7 @@ const Reports = () => {
             </div>
           </div>
         </div>
-      </main>
-      </div>
-    </SidebarProvider>
+    </>
   );
 };
 

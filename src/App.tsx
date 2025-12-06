@@ -1,5 +1,4 @@
 import { Toaster } from "@/components/ui/toaster";
-import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
@@ -18,6 +17,8 @@ import Inventory from "./pages/Inventory";
 import SalesHistoryPage from "./pages/SalesHistoryPage";
 import RestockHistoryPage from "./pages/RestockHistoryPage";
 import SpoilageHistoryPage from "./pages/SpoilageHistoryPage";
+import OwnerSetup from "./pages/OwnerSetup";
+import Developers from "./pages/Developers";
 
 const queryClient = new QueryClient();
 
@@ -25,7 +26,6 @@ const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <Toaster />
-      <Sonner />
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<Index />} />
@@ -33,6 +33,7 @@ const App = () => (
           <Route path="/signup" element={<SignUp />} />
           <Route path="/owner-setup" element={<OwnerSetup />} />
           <Route path="/about" element={<About />} />
+          <Route path="/developers" element={<Developers />} />
           <Route element={<Layout />}>
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/pos" element={<PosPage />} />

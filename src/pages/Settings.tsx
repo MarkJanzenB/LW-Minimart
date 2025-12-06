@@ -1,5 +1,4 @@
-import { AppSidebar } from "@/components/AppSidebar";
-import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Label } from "@/components/ui/label";
@@ -15,22 +14,20 @@ const Settings = () => {
   const { currency, setCurrency } = useCurrency();
   
   return (
-    <SidebarProvider>
-      <div className="flex h-screen w-full bg-background overflow-hidden">
-        <AppSidebar />
-        <main className="flex-1 overflow-y-auto">
-          {/* Header Section */}
-          <div className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-10">
-            <div className="px-8 py-6 flex items-center gap-4">
-              <SidebarTrigger />
-              <div>
-                <h1 className="text-3xl font-bold text-foreground">Settings</h1>
-                <p className="text-muted-foreground mt-1">Manage your account and application preferences</p>
-              </div>
-            </div>
+    <>
+      {/* Header Section */}
+      <div className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-10">
+        <div className="px-8 py-6 flex items-center gap-4">
+          <SidebarTrigger />
+          <SettingsIcon className="w-5 h-5 text-foreground" />
+          <div>
+            <h1 className="text-3xl font-bold text-foreground">Settings</h1>
+            <p className="text-muted-foreground mt-1">Manage your account and application preferences</p>
           </div>
+        </div>
+      </div>
 
-        <div className="p-8 space-y-6 max-w-4xl mx-auto">
+      <div className="p-8 space-y-6 max-w-4xl mx-auto">
           {/* Appearance Settings */}
           <Card className="border-2">
             <CardHeader>
@@ -289,9 +286,7 @@ const Settings = () => {
             </CardContent>
           </Card>
         </div>
-      </main>
-      </div>
-    </SidebarProvider>
+    </>
   );
 };
 
