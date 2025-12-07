@@ -19,10 +19,47 @@ export interface Product {
   updatedAt: string;
 }
 
+export interface SpoilageRecord {
+  id: string;
+  productId: string;
+  productName: string;
+  sku: string;
+  batchNo: string;
+  quantity: number;
+  costPerUnit: number;
+  totalCost: number;
+  expiryDate: string;
+  spoiledAt: string;
+  reason?: string;
+}
+
+export interface ExpenseRecord {
+  id: string;
+  type: 'EXPENSE';
+  category: string;
+  amount: number;
+  date: string;
+  referenceId?: string;
+  notes?: string;
+}
+
+export interface RestockRecord {
+  id: string;
+  productId: string;
+  productName: string;
+  originalSku: string;
+  restockSku: string;
+  quantity: number;
+  batchNo: string;
+  expiryDate: string;
+  barcode: string;
+  createdAt: string;
+}
+
 class DatabaseService {
   private static instance: DatabaseService;
   private dbName = 'lw-minimart';
-  private dbVersion = 1;
+  private dbVersion = 3;
   private db: IDBDatabase | null = null;
 
   private constructor() {
@@ -59,6 +96,24 @@ class DatabaseService {
           store.createIndex('sku', 'sku', { unique: true });
           store.createIndex('category', 'category', { unique: false });
           store.createIndex('name', 'name', { unique: false });
+        }
+
+        if (!db.objectStoreNames.contains('spoilage')) {
+          const spoilageStore = db.createObjectStore('spoilage', { keyPath: 'id' });
+          spoilageStore.createIndex('productId', 'productId', { unique: false });
+          spoilageStore.createIndex('spoiledAt', 'spoiledAt', { unique: false });
+        }
+
+        if (!db.objectStoreNames.contains('expenses')) {
+          const expensesStore = db.createObjectStore('expenses', { keyPath: 'id' });
+          expensesStore.createIndex('type', 'type', { unique: false });
+          expensesStore.createIndex('date', 'date', { unique: false });
+        }
+
+        if (!db.objectStoreNames.contains('restock')) {
+          const restockStore = db.createObjectStore('restock', { keyPath: 'id' });
+          restockStore.createIndex('productId', 'productId', { unique: false });
+          restockStore.createIndex('createdAt', 'createdAt', { unique: false });
         }
       };
     });
@@ -136,6 +191,115 @@ class DatabaseService {
 
       request.onsuccess = () => resolve();
       request.onerror = () => reject('Failed to delete product');
+    });
+  }
+
+  public async moveProductToSpoilage(product: Product, reason: string = 'Expired'): Promise<void> {
+    const db = await this.getDb();
+
+    return new Promise((resolve, reject) => {
+      const quantity = product.stock;
+
+      const transaction = db.transaction(['products', 'spoilage', 'expenses'], 'readwrite');
+      const productsStore = transaction.objectStore('products');
+      const spoilageStore = transaction.objectStore('spoilage');
+      const expensesStore = transaction.objectStore('expenses');
+
+      const costPerUnit = product.cost ?? 0;
+      const totalCost = costPerUnit * quantity;
+      const nowIso = new Date().toISOString();
+
+      const spoilageRecord: SpoilageRecord = {
+        id: uuidv4(),
+        productId: product.id,
+        productName: product.name,
+        sku: product.sku,
+        batchNo: product.batchNo,
+        quantity,
+        costPerUnit,
+        totalCost,
+        expiryDate: product.expiryDate,
+        spoiledAt: nowIso,
+        reason,
+      };
+
+      const expenseRecord: ExpenseRecord = {
+        id: uuidv4(),
+        type: 'EXPENSE',
+        category: 'Spoilage',
+        amount: totalCost,
+        date: nowIso,
+        referenceId: spoilageRecord.id,
+        notes: `Spoilage for ${product.name} (${product.batchNo})`,
+      };
+
+      const updatedProduct: Product = {
+        ...product,
+        stock: 0,
+        status: 'Spoiled',
+        updatedAt: nowIso,
+      };
+
+      spoilageStore.add(spoilageRecord);
+      expensesStore.add(expenseRecord);
+      productsStore.put(updatedProduct);
+
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject('Failed to move product to spoilage');
+      transaction.onabort = () => reject('Failed to move product to spoilage');
+    });
+  }
+
+  public async getSpoilageHistory(): Promise<SpoilageRecord[]> {
+    const db = await this.getDb();
+
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(['spoilage'], 'readonly');
+      const store = transaction.objectStore('spoilage');
+      const request = store.getAll();
+
+      request.onsuccess = () => {
+        resolve((request.result as SpoilageRecord[]) || []);
+      };
+
+      request.onerror = () => reject('Failed to fetch spoilage history');
+    });
+  }
+
+  public async addRestockRecord(record: Omit<RestockRecord, 'id' | 'createdAt'>): Promise<void> {
+    const db = await this.getDb();
+
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(['restock'], 'readwrite');
+      const store = transaction.objectStore('restock');
+
+      const nowIso = new Date().toISOString();
+      const newRecord: RestockRecord = {
+        ...record,
+        id: uuidv4(),
+        createdAt: nowIso,
+      };
+
+      const request = store.add(newRecord);
+
+      request.onsuccess = () => resolve();
+      request.onerror = () => reject('Failed to add restock record');
+    });
+  }
+
+  public async getRestockHistory(): Promise<RestockRecord[]> {
+    const db = await this.getDb();
+
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(['restock'], 'readonly');
+      const store = transaction.objectStore('restock');
+      const request = store.getAll();
+
+      request.onsuccess = () => {
+        resolve((request.result as RestockRecord[]) || []);
+      };
+
+      request.onerror = () => reject('Failed to fetch restock history');
     });
   }
 }

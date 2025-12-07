@@ -166,7 +166,7 @@ export function AddProductDialog({ isOpen, onClose, onProductAdded }: AddProduct
       const datePart = `${mm}${dd}${yy}`;
       const generatedBatchNo = `BT-${counter}-${datePart}`;
 
-      await dbService.addProduct({
+      const newProductId = await dbService.addProduct({
         name: existingProduct.name,
         sku: restockSku,
         category: existingProduct.category,
@@ -180,6 +180,17 @@ export function AddProductDialog({ isOpen, onClose, onProductAdded }: AddProduct
         batchNo: generatedBatchNo,
         barcode: restockData.barcode,
         imageUrl: existingProduct.imageUrl,
+      });
+
+      await dbService.addRestockRecord({
+        productId: existingProduct.id,
+        productName: existingProduct.name,
+        originalSku: existingProduct.sku,
+        restockSku,
+        quantity: additionalStock,
+        batchNo: generatedBatchNo,
+        expiryDate: restockData.expiryDate || existingProduct.expiryDate,
+        barcode: restockData.barcode,
       });
 
       toast.success('Product restocked successfully');

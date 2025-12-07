@@ -80,7 +80,7 @@ const isLowStock = (stock: number, minStock: number): boolean => {
   return stock > 0 && stock < minStock;
 };
 
-const getRowClassName = (item: InventoryItem): string => {
+const getRowClassName = (item: { expiryDate: string; stock: number; minStock: number }): string => {
   if (isExpired(item.expiryDate)) {
     return "row-expired"; // Red
   }
@@ -230,14 +230,23 @@ const Inventory = () => {
   const [detailsProduct, setDetailsProduct] = useState<ProductWithBatches | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isOwner, setIsOwner] = useState(false);
+  const [isSpoilageDialogOpen, setIsSpoilageDialogOpen] = useState(false);
+  const [isProcessingSpoilage, setIsProcessingSpoilage] = useState(false);
+  const [spoilageSummary, setSpoilageSummary] = useState<{
+    products: number;
+    totalQuantity: number;
+    totalCost: number;
+  } | null>(null);
+  const [expiredProductsForSpoilage, setExpiredProductsForSpoilage] = useState<Product[]>([]);
 
   // Fetch products from database on component mount
   useEffect(() => {
     const loadProducts = async () => {
       try {
         const products = await dbService.getProducts();
+        const activeProducts = products.filter((product) => !(product.status === 'Spoiled' && product.stock === 0));
         // Map database products to InventoryItem format
-        const formattedProducts = products.map((product) => ({
+        const formattedProducts = activeProducts.map((product) => ({
           id: product.id,
           name: product.name,
           sku: product.sku,
@@ -310,7 +319,8 @@ const Inventory = () => {
   const handleProductAdded = async () => {
     try {
       const products = await dbService.getProducts();
-      const formattedProducts = products.map((product) => ({
+      const activeProducts = products.filter((product) => !(product.status === 'Spoiled' && product.stock === 0));
+      const formattedProducts = activeProducts.map((product) => ({
         id: product.id,
         name: product.name,
         sku: product.sku,
@@ -691,6 +701,64 @@ const Inventory = () => {
     }
   };
 
+  const openSpoilageDialog = async () => {
+    try {
+      const products = await dbService.getProducts();
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      const expired = products.filter((product) => {
+        if (!product.expiryDate) return false;
+        const expiry = new Date(product.expiryDate);
+        return expiry < today && product.status !== "Spoiled";
+      });
+
+      if (expired.length === 0) {
+        toast.info("No expired products with remaining stock to move to spoilage.");
+        return;
+      }
+
+      const totalQuantity = expired.reduce((sum, p) => sum + p.stock, 0);
+      const totalCost = expired.reduce((sum, p) => sum + (p.cost ?? 0) * p.stock, 0);
+
+      setExpiredProductsForSpoilage(expired);
+      setSpoilageSummary({
+        products: expired.length,
+        totalQuantity,
+        totalCost,
+      });
+      setIsSpoilageDialogOpen(true);
+    } catch (error) {
+      console.error("Error preparing spoilage move:", error);
+      toast.error("Failed to prepare spoilage operation");
+    }
+  };
+
+  const handleConfirmSpoilageMove = async () => {
+    if (expiredProductsForSpoilage.length === 0) {
+      setIsSpoilageDialogOpen(false);
+      return;
+    }
+
+    try {
+      setIsProcessingSpoilage(true);
+      for (const product of expiredProductsForSpoilage) {
+        await dbService.moveProductToSpoilage(product, "Expired");
+      }
+
+      await handleProductAdded();
+      toast.success("Expired products moved to spoilage with expense records.");
+    } catch (error) {
+      console.error("Error moving products to spoilage:", error);
+      toast.error("Failed to move expired products to spoilage");
+    } finally {
+      setIsProcessingSpoilage(false);
+      setIsSpoilageDialogOpen(false);
+      setExpiredProductsForSpoilage([]);
+      setSpoilageSummary(null);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background p-6 md:p-10">
       <div className="max-w-7xl mx-auto">
@@ -792,6 +860,18 @@ const Inventory = () => {
                 <Filter className="w-4 h-4" />
                 <span>Low Stock Only</span>
               </button>
+
+              {stats.expired > 0 && (
+                <Button
+                  type="button"
+                  variant="destructive"
+                  onClick={openSpoilageDialog}
+                  className="flex items-center gap-2"
+                >
+                  <AlertTriangle className="w-4 h-4" />
+                  <span>Move Expired to Spoilage</span>
+                </Button>
+              )}
 
               <AddProductDialog
                 isOpen={isAddDialogOpen}
