@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import logo from "@/assets/lw-mini-mart-logo.png";
 
 const SignIn = () => {
   const [username, setUsername] = useState("");
@@ -85,11 +84,6 @@ const SignIn = () => {
             <ArrowLeft className="h-4 w-4" />
             Back to landing
           </Link>
-        </div>
-        
-        {/* Logo at Bottom Left */}
-        <div className="absolute bottom-8 left-8 z-10">
-          <img src={logo} alt="LW Mini Mart" className="h-10" />
         </div>
       </div>
 

@@ -9,8 +9,6 @@ import {
   LogOut,
   History
 } from "lucide-react";
-import logoWithText from "@/assets/lw-logo-with-text.png";
-import logoIcon from "@/assets/lw-logo-icon.png";
 import { useToast } from "@/hooks/use-toast";
 
 import {
@@ -59,12 +57,16 @@ export function AppSidebar() {
 
   const handleSignOut = async () => {
     try {
-      await window.api.auth.logout();
-      toast({
-        title: "Signed out successfully",
-        description: "You have been logged out of your account.",
-      });
-      navigate("/signin");
+      if (typeof window !== 'undefined' && (window as any).api?.auth) {
+        await (window as any).api.auth.logout();
+        toast({
+          title: "Signed out successfully",
+          description: "You have been logged out of your account.",
+        });
+        navigate("/signin");
+      } else {
+        navigate("/signin");
+      }
     } catch (error) {
       console.error("Sign out error:", error);
       navigate("/signin");
@@ -80,15 +82,6 @@ export function AppSidebar() {
         "--sidebar-width-icon": "5rem" 
       } as React.CSSProperties}
     >
-      {/* 2. FIX: Dynamic padding. 'p-6' when open, 'py-6' + centered when closed */}
-      <div className={`border-b border-sidebar-border/50 ${open ? "p-6" : "py-6 flex justify-center"}`}>
-        {open ? (
-          <img src={logoWithText} alt="LW Mini Mart" className="h-8" />
-        ) : (
-          <img src={logoIcon} alt="LW Mini Mart" className="h-8 w-8" />
-        )}
-      </div>
-
       <SidebarContent className="px-3 py-5">
         <SidebarGroup>
           <SidebarGroupContent>
@@ -164,13 +157,11 @@ export function AppSidebar() {
           <SidebarMenuItem>
             <SidebarMenuButton 
               onClick={handleSignOut}
-              className="hover:bg-destructive/10 hover:text-destructive transition-colors w-full"
+              className="hover:bg-destructive/10 hover:text-destructive transition-colors"
+              tooltip={!open ? "Sign Out" : undefined}
             >
-              <div className="flex items-center gap-3 px-3 py-2.5 rounded-lg w-full">
-                <LogOut className="w-5 h-5" />
-                {/* 3. FIX: Hide text when closed to prevent overflow */}
-                {open && <span className="font-medium">Sign Out</span>}
-              </div>
+              <LogOut className="w-5 h-5" />
+              {open && <span className="font-medium">Sign Out</span>}
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>

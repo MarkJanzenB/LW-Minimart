@@ -40,6 +40,7 @@ function createWindow() {
 
   if (isDev) {
     mainWindow.loadURL("http://localhost:8080");
+    mainWindow.webContents.openDevTools();
   } else {
     mainWindow.loadFile(join(__dirname, "..", "dist", "index.html"));
   }

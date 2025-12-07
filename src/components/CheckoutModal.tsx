@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { CreditCard, Banknote, Printer, X } from 'lucide-react';
 import { CartItem } from '../types';
+import { formatCurrency } from '@/hooks/use-currency';
 
 interface CheckoutModalProps {
   total: number;
@@ -52,7 +53,7 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ total, onConfirm, onCance
              <h2 className="text-3xl font-extrabold text-stone-900 mb-2">Checkout</h2>
              <p className="text-stone-500 mb-8">Total Due</p>
              <div className="text-6xl font-black text-stone-800 tracking-tight">
-               ₱{total.toFixed(2)}
+               {formatCurrency(total)}
              </div>
            </div>
            
@@ -100,7 +101,7 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ total, onConfirm, onCance
                   {method === 'cash' ? 'Change Due' : 'Status'}
                 </span>
                 <span className="text-5xl font-bold font-mono">
-                  {method === 'cash' ? `₱${change.toFixed(2)}` : 'Ready'}
+                  {method === 'cash' ? formatCurrency(change) : 'Ready'}
                 </span>
               </div>
             </div>

@@ -9,9 +9,11 @@ const Layout = () => {
   useEffect(() => {
     const ensureOwnerExists = async () => {
       try {
-        const { hasOwner } = await window.api.auth.hasOwner();
-        if (!hasOwner) {
-          navigate("/owner-setup");
+        if (typeof window !== 'undefined' && (window as any).api?.auth) {
+          const { hasOwner } = await (window as any).api.auth.hasOwner();
+          if (!hasOwner) {
+            navigate("/owner-setup");
+          }
         }
       } catch (error) {
         console.error("Error checking owner existence in layout:", error);

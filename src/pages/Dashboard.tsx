@@ -1,9 +1,15 @@
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { TrendingUp, TrendingDown, DollarSign, Package, ShoppingCart, Users } from "lucide-react";
-import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
+import { TrendingUp, TrendingDown, DollarSign, Package, ShoppingCart, Users, LayoutDashboard } from "lucide-react";
+import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from "recharts";
+import { useLocation } from "react-router-dom";
+import { formatCurrency, useCurrency } from "@/hooks/use-currency";
 
 const Dashboard = () => {
+  const location = useLocation();
+  const isCashflow = location.pathname === "/cashflow";
+  const { currency } = useCurrency();
+  
   // Sample data for charts
   const salesData = [
     { month: "Jan", sales: 4000 },
@@ -21,16 +27,16 @@ const Dashboard = () => {
     { category: "Other", value: 10 },
   ];
 
-  const COLORS = ["hsl(160, 84%, 39%)", "hsl(160, 70%, 50%)", "hsl(160, 50%, 60%)", "hsl(160, 30%, 70%)"];
+  const COLORS = ["#133020", "#FFB347", "#FFC370", "#133020"];
 
   const revenueData = [
-    { day: "Mon", revenue: 2400 },
-    { day: "Tue", revenue: 1398 },
-    { day: "Wed", revenue: 9800 },
-    { day: "Thu", revenue: 3908 },
-    { day: "Fri", revenue: 4800 },
-    { day: "Sat", revenue: 3800 },
-    { day: "Sun", revenue: 4300 },
+    { day: "Mon", income: 2400, expenses: 1200, profit: 1200 },
+    { day: "Tue", income: 1398, expenses: 1000, profit: 398 },
+    { day: "Wed", income: 9800, expenses: 4500, profit: 5300 },
+    { day: "Thu", income: 3908, expenses: 2000, profit: 1908 },
+    { day: "Fri", income: 4800, expenses: 2200, profit: 2600 },
+    { day: "Sat", income: 3800, expenses: 1800, profit: 2000 },
+    { day: "Sun", income: 4300, expenses: 1900, profit: 2400 },
   ];
 
   return (
@@ -39,9 +45,14 @@ const Dashboard = () => {
           <div className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-10">
             <div className="px-8 py-6 flex items-center gap-4">
               <SidebarTrigger />
+              {isCashflow ? (
+                <DollarSign className="w-5 h-5 text-foreground" />
+              ) : (
+                <LayoutDashboard className="w-5 h-5 text-foreground" />
+              )}
               <div>
-                <h1 className="text-3xl font-bold text-foreground">Dashboard</h1>
-                <p className="text-muted-foreground mt-1">Overview of your store performance</p>
+                <h1 className="text-3xl font-bold text-foreground">{isCashflow ? "Cashflow" : "Dashboard"}</h1>
+                <p className="text-muted-foreground mt-1">{isCashflow ? "Financial overview and cash flow tracking" : "Overview of your store"}</p>
               </div>
             </div>
           </div>
@@ -55,7 +66,7 @@ const Dashboard = () => {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm text-muted-foreground font-medium">Total Revenue</p>
-                    <h3 className="text-3xl font-bold mt-2 text-foreground">3,605 <span className="text-lg">USD/m</span></h3>
+                    <h3 className="text-3xl font-bold mt-2 text-foreground">{formatCurrency(3605)} <span className="text-lg">/{currency.code.toLowerCase()}/m</span></h3>
                     <div className="flex items-center mt-2 text-primary">
                       <TrendingUp className="w-4 h-4 mr-1" />
                       <span className="text-sm font-medium">+12.5% from last month</span>
@@ -147,7 +158,7 @@ const Dashboard = () => {
                         borderRadius: "8px"
                       }} 
                     />
-                    <Bar dataKey="sales" fill="hsl(var(--primary))" radius={[8, 8, 0, 0]} />
+                    <Bar dataKey="sales" fill="#133020" radius={[8, 8, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </CardContent>
@@ -174,11 +185,32 @@ const Dashboard = () => {
                     />
                     <Line 
                       type="monotone" 
-                      dataKey="revenue" 
-                      stroke="hsl(var(--primary))" 
+                      dataKey="income" 
+                      stroke="#133020" 
                       strokeWidth={3}
-                      dot={{ fill: "hsl(var(--primary))", r: 5 }}
+                      dot={{ fill: "#133020", r: 6, strokeWidth: 0 }}
+                      activeDot={{ r: 8, fill: "#133020" }}
+                      name="Income"
                     />
+                    <Line 
+                      type="monotone" 
+                      dataKey="expenses" 
+                      stroke="hsl(0, 84%, 60%)" 
+                      strokeWidth={3}
+                      dot={{ fill: "hsl(0, 84%, 60%)", r: 6, strokeWidth: 0 }}
+                      activeDot={{ r: 8, fill: "hsl(0, 84%, 60%)" }}
+                      name="Expenses"
+                    />
+                    <Line 
+                      type="monotone" 
+                      dataKey="profit" 
+                      stroke="#FFB347" 
+                      strokeWidth={3}
+                      dot={{ fill: "#FFB347", r: 6, strokeWidth: 0 }}
+                      activeDot={{ r: 8, fill: "#FFB347" }}
+                      name="Profit"
+                    />
+                    <Legend />
                   </LineChart>
                 </ResponsiveContainer>
               </CardContent>
@@ -202,7 +234,7 @@ const Dashboard = () => {
                         cy="50%"
                         innerRadius={0}
                         outerRadius={80}
-                        fill="#8884d8"
+                        fill="#133020"
                         dataKey="value"
                         label={false}
                       >
@@ -246,7 +278,7 @@ const Dashboard = () => {
                       <span className="font-medium">United States</span>
                     </div>
                     <div className="text-right">
-                      <p className="font-semibold">$12,584</p>
+                      <p className="font-semibold">{formatCurrency(12584)}</p>
                       <p className="text-xs text-muted-foreground">+18%</p>
                     </div>
                   </div>
@@ -259,7 +291,7 @@ const Dashboard = () => {
                       <span className="font-medium">United Kingdom</span>
                     </div>
                     <div className="text-right">
-                      <p className="font-semibold">$8,942</p>
+                      <p className="font-semibold">{formatCurrency(8942)}</p>
                       <p className="text-xs text-muted-foreground">+12%</p>
                     </div>
                   </div>
@@ -272,7 +304,7 @@ const Dashboard = () => {
                       <span className="font-medium">Canada</span>
                     </div>
                     <div className="text-right">
-                      <p className="font-semibold">$6,731</p>
+                      <p className="font-semibold">{formatCurrency(6731)}</p>
                       <p className="text-xs text-muted-foreground">+9%</p>
                     </div>
                   </div>
@@ -285,7 +317,7 @@ const Dashboard = () => {
                       <span className="font-medium">Australia</span>
                     </div>
                     <div className="text-right">
-                      <p className="font-semibold">$5,289</p>
+                      <p className="font-semibold">{formatCurrency(5289)}</p>
                       <p className="text-xs text-muted-foreground">+7%</p>
                     </div>
                   </div>
