@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer } from "electron";
+import type { Product } from "../src/services/database";
 
 contextBridge.exposeInMainWorld("api", {
   auth: {
@@ -11,6 +12,12 @@ contextBridge.exposeInMainWorld("api", {
     hasOwner: () => ipcRenderer.invoke("auth:hasOwner"),
     initializeOwner: (username: string, password: string) =>
       ipcRenderer.invoke("auth:initializeOwner", { username, password }),
+  },
+  inventory: {
+    syncFromClient: (products: Product[]) =>
+      ipcRenderer.invoke("inventory:syncFromClient", products),
+    getMirror: () => ipcRenderer.invoke('inventory:getMirror'),
+    delete: (id: string) => ipcRenderer.invoke('inventory:delete', id),
   },
 });
 
@@ -31,6 +38,11 @@ declare global {
           username: string,
           password: string
         ): Promise<{ success: boolean; message?: string }>;
+      };
+      inventory: {
+        syncFromClient(products: Product[]): Promise<void>;
+        getMirror(): Promise<Product[]>;
+        delete(id: string): Promise<void>;
       };
     };
   }

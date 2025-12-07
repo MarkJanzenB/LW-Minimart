@@ -18,6 +18,7 @@ import Inventory from "./pages/Inventory";
 import SalesHistoryPage from "./pages/SalesHistoryPage";
 import RestockHistoryPage from "./pages/RestockHistoryPage";
 import SpoilageHistoryPage from "./pages/SpoilageHistoryPage";
+import OwnerSetup from "./pages/OwnerSetup";
 
 const queryClient = new QueryClient();
 

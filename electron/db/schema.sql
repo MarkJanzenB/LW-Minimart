@@ -79,3 +79,23 @@ CREATE TABLE IF NOT EXISTS low_stock_alerts (
                                   is_resolved INTEGER DEFAULT 0,
                                   FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
 );
+
+-- Mirror of frontend inventory products from IndexedDB
+CREATE TABLE IF NOT EXISTS inventory_mirror (
+  id TEXT PRIMARY KEY,
+  name TEXT,
+  sku TEXT,
+  category TEXT,
+  supplier TEXT,
+  cost REAL,
+  price REAL,
+  stock INTEGER,
+  minStock INTEGER,
+  expiryDate TEXT,
+  status TEXT,
+  batchNo TEXT,
+  barcode TEXT,
+  imageUrl TEXT,
+  createdAt TEXT,
+  updatedAt TEXT
+);

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   Search,
   Plus,
@@ -17,14 +17,43 @@ import {
   LayoutGrid,
   List,
   Upload,
-  Scan,
-  TrendingUp,
-  Calendar,
+  MoreHorizontal,
+  MoreVertical,
 } from "lucide-react";
 import { SidebarTrigger } from "@/components/ui/sidebar";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { dbService, Product } from "@/services/database";
+import { toast } from "sonner";
+import { AddProductDialog } from "@/components/AddProductDialog";
+import { EditProductDialog } from "@/components/EditProductDialog";
 
 // TypeScript Interface
 interface InventoryItem {
+  id: string;
+  name: string;
+  sku: string;
+  price: number;
+  stock: number;
+  minStock: number;
+  category: string;
+  expiryDate: string;
+  status: string;
+  batchNo: string;
+  barcode: string;
+  imageUrl?: string;
+}
+
+interface BatchInfo {
+  id: string;
+  batchNo: string;
+  expiryDate: string;
+  stock: number;
+  status: string;
+  barcode: string;
+}
+
+interface ProductWithBatches {
   id: string;
   name: string;
   price: number;
@@ -36,6 +65,7 @@ interface InventoryItem {
   batchNo: string;
   barcode: string;
   imageUrl?: string;
+  batches: BatchInfo[];
 }
 
 // Traffic Light Helper Functions
@@ -51,59 +81,21 @@ const isLowStock = (stock: number, minStock: number): boolean => {
 };
 
 const getRowClassName = (item: InventoryItem): string => {
-  switch (item.status) {
-    case "Expired":
-      return "row-expired bg-red-50 border-l-4 border-l-red-500"; // Red
-    case "Low Stock":
-      return "row-low-stock bg-orange-50 border-l-4 border-l-orange-500"; // Yellow
-    case "In Stock":
-      return "row-in-stock bg-green-50 border-l-4 border-l-green-500"; // Green
-    default:
-      return "row-in-stock bg-green-50 border-l-4 border-l-green-500"; // Default to green
+  if (isExpired(item.expiryDate)) {
+    return "row-expired"; // Red
   }
+  if (isLowStock(item.stock, item.minStock)) {
+    return "row-low-stock"; // Yellow
+  }
+  return "";
 };
 
-// Sample Data
+// Initialize with empty array - will be populated from database
 const sampleInventoryData: InventoryItem[] = [
   {
-    id: "INV001",
-    name: "Organic Green Tea",
-    price: 24.99,
-    stock: 145,
-    minStock: 20,
-    category: "Beverages",
-    expiryDate: "2025-08-15",
-    status: "In Stock",
-    batchNo: "BT-2024-001",
-    barcode: "8901234567890",
-  },
-  {
-    id: "INV002",
-    name: "Premium Coffee Beans",
-    price: 34.50,
-    stock: 8,
-    minStock: 15,
-    category: "Beverages",
-    expiryDate: "2025-06-20",
-    status: "Low Stock",
-    batchNo: "BT-2024-002",
-    barcode: "8901234567891",
-  },
-  {
-    id: "INV003",
-    name: "Almond Butter",
-    price: 12.99,
-    stock: 25,
-    minStock: 10,
-    category: "Food",
-    expiryDate: "2024-11-30",
-    status: "Expired",
-    batchNo: "BT-2024-003",
-    barcode: "8901234567892",
-  },
-  {
     id: "INV004",
-    name: "Vitamin D3 Supplements",
+    name: "Sample Item",
+    sku: "SKU-INV004",
     price: 18.75,
     stock: 234,
     minStock: 30,
@@ -111,11 +103,12 @@ const sampleInventoryData: InventoryItem[] = [
     expiryDate: "2026-03-10",
     status: "In Stock",
     batchNo: "BT-2024-004",
-    barcode: "8901234567893",
+    barcode: "8901234567893"
   },
   {
     id: "INV005",
     name: "Coconut Oil",
+    sku: "SKU-INV005",
     price: 9.99,
     stock: 5,
     minStock: 15,
@@ -128,6 +121,7 @@ const sampleInventoryData: InventoryItem[] = [
   {
     id: "INV006",
     name: "Protein Powder",
+    sku: "SKU-INV006",
     price: 45.00,
     stock: 67,
     minStock: 20,
@@ -140,6 +134,7 @@ const sampleInventoryData: InventoryItem[] = [
   {
     id: "INV007",
     name: "Herbal Shampoo",
+    sku: "SKU-INV007",
     price: 14.25,
     stock: 3,
     minStock: 10,
@@ -152,6 +147,7 @@ const sampleInventoryData: InventoryItem[] = [
   {
     id: "INV008",
     name: "Quinoa Seeds",
+    sku: "SKU-INV008",
     price: 8.50,
     stock: 189,
     minStock: 25,
@@ -164,6 +160,7 @@ const sampleInventoryData: InventoryItem[] = [
   {
     id: "INV009",
     name: "Essential Oil Set",
+    sku: "SKU-INV009",
     price: 29.99,
     stock: 10,
     minStock: 12,
@@ -176,6 +173,7 @@ const sampleInventoryData: InventoryItem[] = [
   {
     id: "INV010",
     name: "Matcha Powder",
+    sku: "SKU-INV010",
     price: 22.00,
     stock: 56,
     minStock: 15,
@@ -188,6 +186,7 @@ const sampleInventoryData: InventoryItem[] = [
   {
     id: "INV011",
     name: "Honey Raw Organic",
+    sku: "SKU-INV011",
     price: 16.50,
     stock: 2,
     minStock: 10,
@@ -200,6 +199,7 @@ const sampleInventoryData: InventoryItem[] = [
   {
     id: "INV012",
     name: "Omega-3 Fish Oil",
+    sku: "SKU-INV012",
     price: 28.99,
     stock: 98,
     minStock: 20,
@@ -211,68 +211,281 @@ const sampleInventoryData: InventoryItem[] = [
   },
 ];
 
-// Get unique categories
-const categories = ["All", ...new Set(sampleInventoryData.map((item) => item.category))];
+// Get unique categories from inventory when available, otherwise from sample data
+const getCategories = (data: ProductWithBatches[]) => ["All", ...new Set(data.map((item) => item.category))];
 
-type SortKey = keyof InventoryItem;
+type SortKey = keyof ProductWithBatches;
 type SortDirection = "asc" | "desc";
 
 const Inventory = () => {
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState<InventoryItem | null>(null);
+  const [isAdminViewerOpen, setIsAdminViewerOpen] = useState(false);
+  const [adminMirror, setAdminMirror] = useState<InventoryItem[]>([]);
+  const [isRowDeleteOpen, setIsRowDeleteOpen] = useState(false);
+  const [rowToDelete, setRowToDelete] = useState<InventoryItem | null>(null);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [inventory, setInventory] = useState<InventoryItem[]>([]);
+  const [detailsProduct, setDetailsProduct] = useState<ProductWithBatches | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isOwner, setIsOwner] = useState(false);
+
+  // Fetch products from database on component mount
+  useEffect(() => {
+    const loadProducts = async () => {
+      try {
+        const products = await dbService.getProducts();
+        // Map database products to InventoryItem format
+        const formattedProducts = products.map((product) => ({
+          id: product.id,
+          name: product.name,
+          sku: product.sku,
+          price: product.price,
+          stock: product.stock,
+          minStock: product.minStock,
+          category: product.category,
+          expiryDate: product.expiryDate,
+          status: product.status,
+          batchNo: product.batchNo,
+          barcode: product.barcode,
+          imageUrl: product.imageUrl,
+        }));
+        setInventory(formattedProducts);
+      } catch (error) {
+        console.error("Error loading products:", error);
+        toast.error("Failed to load products");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    loadProducts();
+  }, []);
+
+  useEffect(() => {
+    const checkRole = async () => {
+      try {
+        if (typeof window === 'undefined' || !window.api || !window.api.auth) return;
+        const result = await window.api.auth.getCurrentUser();
+        const role = result?.user?.role;
+        setIsOwner(role === 'owner');
+      } catch (error) {
+        console.error('Error checking current user role:', error);
+      }
+    };
+
+    void checkRole();
+  }, []);
+
+  const openRowDeleteDialog = (item: InventoryItem) => {
+    setRowToDelete(item);
+    setDeleteConfirmText("");
+    setIsRowDeleteOpen(true);
+  };
+
+  const handleConfirmRowDelete = async () => {
+    if (!rowToDelete) return;
+
+    try {
+      await dbService.deleteProduct(rowToDelete.id);
+
+      const api = window.api;
+      if (api && api.inventory) {
+        await api.inventory.delete(rowToDelete.id);
+      }
+
+      setInventory((prev) => prev.filter((item) => item.id !== rowToDelete.id));
+      await handleProductAdded();
+
+      toast.success(`Deleted product ${rowToDelete.name}`);
+      setIsRowDeleteOpen(false);
+      setRowToDelete(null);
+      setDeleteConfirmText("");
+    } catch (error) {
+      console.error("Error deleting product:", error);
+      toast.error("Failed to delete product");
+    }
+  };
+
+  const handleProductAdded = async () => {
+    try {
+      const products = await dbService.getProducts();
+      const formattedProducts = products.map((product) => ({
+        id: product.id,
+        name: product.name,
+        sku: product.sku,
+        price: product.price,
+        stock: product.stock,
+        minStock: product.minStock,
+        category: product.category,
+        expiryDate: product.expiryDate,
+        status: product.status,
+        batchNo: product.batchNo,
+        barcode: product.barcode,
+        imageUrl: product.imageUrl,
+      }));
+      setInventory(formattedProducts);
+    } catch (error) {
+      console.error("Error refreshing products:", error);
+      toast.error("Failed to refresh products");
+    }
+  };
+
+  const handleProductUpdatedOrDeleted = async () => {
+    await handleProductAdded();
+  };
+
+  const openAdminViewer = async () => {
+    try {
+      const api = window.api;
+      if (!api || !api.inventory) {
+        toast.error("Admin data viewer is only available in the desktop app.");
+        return;
+      }
+
+      const products = await dbService.getProducts();
+      const nowIso = new Date().toISOString();
+      const normalized = products.map((product) => ({
+        ...product,
+        createdAt: product.createdAt ?? nowIso,
+        updatedAt: product.updatedAt ?? nowIso,
+      }));
+
+      await api.inventory.syncFromClient(normalized);
+      const mirror = await api.inventory.getMirror();
+      setAdminMirror(mirror as InventoryItem[]);
+      setIsAdminViewerOpen(true);
+    } catch (error) {
+      console.error("Error loading admin viewer:", error);
+      toast.error("Failed to load admin data viewer");
+    }
+  };
+
+  const handleAdminDelete = async (id: string) => {
+    try {
+      await dbService.deleteProduct(id);
+      await window.api.inventory.delete(id);
+      setAdminMirror(prev => prev.filter(item => item.id !== id));
+      await handleProductAdded();
+    } catch (error) {
+      console.error("Error deleting product from admin viewer:", error);
+      toast.error("Failed to delete product");
+    }
+  };
+
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [showLowStockOnly, setShowLowStockOnly] = useState(false);
-  const [showExpiredOnly, setShowExpiredOnly] = useState(false);
-  const [isModalOpen, setIsModalOpen] = useState(false);
   const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
   const [isCategoryOpen, setIsCategoryOpen] = useState(false);
   const [sortKey, setSortKey] = useState<SortKey>("id");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
-  const [viewMode, setViewMode] = useState<'list' | 'card'>('list');
+  const [viewMode, setViewMode] = useState<"list" | "card">("list");
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 20;
 
+  const baseData: InventoryItem[] = inventory.length > 0 ? inventory : sampleInventoryData;
+
+  const groupedData: ProductWithBatches[] = useMemo(() => {
+    const groups = new Map<string, InventoryItem[]>();
+
+    for (const item of baseData) {
+      const key = item.name;
+      const existing = groups.get(key) ?? [];
+      existing.push(item);
+      groups.set(key, existing);
+    }
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const result: ProductWithBatches[] = [];
+
+    for (const [, items] of groups) {
+      const first = items[0];
+      const totalStock = items.reduce((sum, it) => sum + it.stock, 0);
+      const minStock = items.reduce((min, it) => (min === null ? it.minStock : Math.min(min, it.minStock)), null as number | null) ?? 0;
+
+      let nearestExpiry = items[0].expiryDate;
+      for (const it of items) {
+        if (!nearestExpiry) {
+          nearestExpiry = it.expiryDate;
+          continue;
+        }
+        if (it.expiryDate && new Date(it.expiryDate) < new Date(nearestExpiry)) {
+          nearestExpiry = it.expiryDate;
+        }
+      }
+
+      const isExpiredGroup = nearestExpiry ? new Date(nearestExpiry) < today : false;
+      const isLowStockGroup = totalStock > 0 && totalStock < minStock;
+
+      let status = first.status;
+      if (totalStock === 0) {
+        status = "Out of Stock";
+      } else if (isExpiredGroup) {
+        status = "Expired";
+      } else if (isLowStockGroup) {
+        status = "Low Stock";
+      } else {
+        status = "In Stock";
+      }
+
+      let batchForDisplay = first.batchNo;
+      let barcodeForDisplay = first.barcode;
+      if (nearestExpiry) {
+        const match = items.find((it) => it.expiryDate === nearestExpiry) ?? first;
+        batchForDisplay = match.batchNo;
+        barcodeForDisplay = match.barcode;
+      }
+
+      const batches: BatchInfo[] = items.map((it) => ({
+        id: it.id,
+        batchNo: it.batchNo,
+        expiryDate: it.expiryDate,
+        stock: it.stock,
+        status: it.status,
+        barcode: it.barcode,
+      }));
+
+      result.push({
+        id: first.id,
+        name: first.name,
+        price: first.price,
+        stock: totalStock,
+        minStock,
+        category: first.category,
+        expiryDate: nearestExpiry,
+        status,
+        batchNo: batchForDisplay,
+        barcode: barcodeForDisplay,
+        imageUrl: first.imageUrl,
+        batches,
+      });
+    }
+
+    return result;
+  }, [baseData]);
+
+  const categories = getCategories(groupedData);
+
   // Calculate statistics
   const stats = useMemo(() => {
-    const lowStock = sampleInventoryData.filter((item) => item.stock > 0 && item.stock <= 10).length;
-    const inStock = sampleInventoryData.filter((item) => item.status === "In Stock").length;
-    const expired = sampleInventoryData.filter((item) => item.status === "Expired").length;
-    
-    // Calculate product in (total stock of in-stock items)
-    const productIn = sampleInventoryData
-      .filter((item) => item.status === "In Stock")
-      .reduce((sum, item) => sum + item.stock, 0);
-    
-    // Calculate product out (simulated as items that are out of stock)
-    const productOut = sampleInventoryData.filter((item) => item.stock === 0).length;
-    
-    // Find nearest expiration date
-    const nonExpiredItems = sampleInventoryData.filter((item) => !isExpired(item.expiryDate));
-    const nearestExpiryItem = nonExpiredItems.length > 0 
-      ? nonExpiredItems.reduce((nearest, item) => {
-          const itemDate = new Date(item.expiryDate);
-          const nearestDate = new Date(nearest.expiryDate);
-          return itemDate < nearestDate ? item : nearest;
-        })
-      : null;
-    
-    const nearestExpiry = nearestExpiryItem ? nearestExpiryItem.expiryDate : null;
-    
-    // Calculate days until expiry for better display
-    const getDaysUntilExpiry = (expiryDate: string) => {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const expiry = new Date(expiryDate);
-      const diffTime = expiry.getTime() - today.getTime();
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-      return diffDays;
-    };
-    
-    return { lowStock, inStock, expired, productIn, productOut, nearestExpiry, nearestExpiryItem, getDaysUntilExpiry };
-  }, []);
+    const lowStock = groupedData.filter((item) => item.stock > 0 && item.stock <= 10).length;
+    const inStock = groupedData.filter((item) => item.status === "In Stock").length;
+    const expired = groupedData.filter((item) => item.status === "Expired").length;
+    const outOfStock = groupedData.filter((item) => item.status === "Out of Stock").length;
+    return { lowStock, inStock, expired, outOfStock };
+  }, [groupedData]);
+
+  const hasOutOfStock = useMemo(
+    () => groupedData.some((item) => item.status === "Out of Stock"),
+    [groupedData]
+  );
 
   // Filter and sort data
   const filteredData = useMemo(() => {
-    let data = [...sampleInventoryData];
+    let data = [...groupedData];
 
     // Search filter
     if (searchTerm) {
@@ -290,22 +503,9 @@ const Inventory = () => {
       data = data.filter((item) => item.category === selectedCategory);
     }
 
-    // Expired filter
-    if (showExpiredOnly) {
-      data = data.filter((item) => item.status === "Expired");
-      // Apply category filter to expired results as well
-      if (selectedCategory !== "All") {
-        data = data.filter((item) => item.category === selectedCategory);
-      }
-    }
-
-    // Low stock filter (with category filter)
+    // Low stock filter
     if (showLowStockOnly) {
       data = data.filter((item) => item.stock <= 10);
-      // Apply category filter to low stock results as well
-      if (selectedCategory !== "All") {
-        data = data.filter((item) => item.category === selectedCategory);
-      }
     }
 
     // Sort
@@ -322,7 +522,7 @@ const Inventory = () => {
     });
 
     return data;
-  }, [searchTerm, selectedCategory, showLowStockOnly, showExpiredOnly, sortKey, sortDirection]);
+  }, [searchTerm, selectedCategory, showLowStockOnly, sortKey, sortDirection, groupedData]);
 
   const paginatedData = useMemo(() => {
     const startIndex = (currentPage - 1) * itemsPerPage;
@@ -467,7 +667,7 @@ const Inventory = () => {
       </html>
     `;
 
-    const printWindow = window.open("", "_blank") as any;
+    const printWindow = window.open("", "_blank") as unknown as Window | null;
     if (printWindow) {
       printWindow.document.write(printContent);
       printWindow.document.close();
@@ -486,7 +686,8 @@ const Inventory = () => {
       case "In Stock":
         return <span className="badge-in-stock">{status}</span>;
       default:
-        return <span className="badge-in-stock">{status}</span>;
+        // Treat "Out of Stock" and any unknown status as neutral/gray.
+        return <span className="badge-neutral">{status}</span>;
     }
   };
 
@@ -495,7 +696,7 @@ const Inventory = () => {
       <div className="max-w-7xl mx-auto">
         {/* Header Section */}
         <div className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-10">
-          <div className="px-8 py-6 flex items-center justify-between">
+          <div className="px-8 py-6 flex items-center gap-4 justify-between">
             <div className="flex items-center gap-4">
               <SidebarTrigger />
               <div>
@@ -503,227 +704,175 @@ const Inventory = () => {
                 <p className="text-muted-foreground mt-1">Track and manage your products.</p>
               </div>
             </div>
-            
-            {/* Export Button in Header */}
-            <div className="relative z-10">
-              <button
-                onClick={() => setIsExportMenuOpen(!isExportMenuOpen)}
-                className="glass-button flex items-center gap-2"
-              >
-                <Download className="w-4 h-4" />
-                <span>Export</span>
-                <ChevronDown
-                  className={`w-4 h-4 transition-transform ${isExportMenuOpen ? "rotate-180" : ""}`}
-                />
-              </button>
-              {isExportMenuOpen && (
-                <div className="absolute top-full right-0 mt-2 w-48 glass-card py-2 z-[70] animate-scale-in">
-                  <button
-                    onClick={exportToCSV}
-                    className="w-full text-left px-4 py-2.5 hover:bg-muted transition-colors flex items-center gap-3 text-sm"
-                  >
-                    <FileText className="w-4 h-4 text-primary" />
-                    <span>Export CSV</span>
-                  </button>
-                  <button
-                    onClick={exportToExcel}
-                    className="w-full text-left px-4 py-2.5 hover:bg-muted transition-colors flex items-center gap-3 text-sm"
-                  >
-                    <FileSpreadsheet className="w-4 h-4 text-primary" />
-                    <span>Export Excel</span>
-                  </button>
-                  <button
-                    onClick={exportToPDF}
-                    className="w-full text-left px-4 py-2.5 hover:bg-muted transition-colors flex items-center gap-3 text-sm"
-                  >
-                    <FileText className="w-4 h-4 text-accent" />
-                    <span>Export PDF</span>
-                  </button>
-                </div>
-              )}
-            </div>
+            <button
+              type="button"
+              onClick={openAdminViewer}
+              className="p-2 rounded-full hover:bg-muted text-muted-foreground opacity-0 hover:opacity-100 focus:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background transition-opacity"
+              aria-label="Open admin data viewer"
+            >
+              <MoreHorizontal className="w-5 h-5" />
+            </button>
           </div>
         </div>
 
-        {/* Summary Section */}
-        <div className="mt-6 mb-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {/* Product In */}
-            <div className="relative overflow-hidden bg-gradient-to-br from-green-50 to-green-100 border border-green-200 rounded-2xl p-6 hover:shadow-lg transition-all duration-300 animate-fade-in-up opacity-0" style={{ animationDelay: "100ms" }}>
-              <div className="absolute top-0 right-0 w-20 h-20 bg-green-200/20 rounded-full -mr-10 -mt-10"></div>
-              <div className="relative">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="w-12 h-12 rounded-xl bg-green-500/10 flex items-center justify-center">
-                    <TrendingUp className="w-6 h-6 text-green-600" />
-                  </div>
-                  <span className="text-xs font-medium text-green-600 bg-green-100 px-2 py-1 rounded-full">+12.5%</span>
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-green-700 mb-1">Product In</p>
-                  <p className="text-3xl font-bold text-green-900">{stats.productIn}</p>
-                  <p className="text-sm text-green-600 mt-1">Total units in stock</p>
-                </div>
+        {isOwner && hasOutOfStock && (
+          <div className="mt-4 mb-6 glass-card border border-destructive/40 bg-destructive/5 px-4 py-3 flex items-start gap-3">
+            <AlertTriangle className="w-5 h-5 text-destructive mt-0.5" />
+            <div>
+              <p className="text-sm font-medium text-destructive">Some products are out of stock.</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                As the store owner, you may want to restock these items to avoid lost sales.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          <div className="stat-card-warning animate-fade-in-up opacity-0" style={{ animationDelay: "100ms" }}>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-2">Low Stock Items</p>
+                <p className="text-4xl font-display font-bold text-foreground">{stats.lowStock}</p>
+              </div>
+              <div className="w-12 h-12 rounded-xl bg-accent/15 flex items-center justify-center">
+                <AlertTriangle className="w-6 h-6 text-accent" />
               </div>
             </div>
+          </div>
 
-            {/* Product Out */}
-            <div className="relative overflow-hidden bg-gradient-to-br from-orange-50 to-orange-100 border border-orange-200 rounded-2xl p-6 hover:shadow-lg transition-all duration-300 animate-fade-in-up opacity-0" style={{ animationDelay: "200ms" }}>
-              <div className="absolute top-0 right-0 w-20 h-20 bg-orange-200/20 rounded-full -mr-10 -mt-10"></div>
-              <div className="relative">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="w-12 h-12 rounded-xl bg-orange-500/10 flex items-center justify-center">
-                    <Package className="w-6 h-6 text-orange-600" />
-                  </div>
-                  <span className="text-xs font-medium text-orange-600 bg-orange-100 px-2 py-1 rounded-full">-3.2%</span>
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-orange-700 mb-1">Product Out</p>
-                  <p className="text-3xl font-bold text-orange-900">{stats.productOut}</p>
-                  <p className="text-sm text-orange-600 mt-1">Out of stock items</p>
-                </div>
+          <div className="stat-card-success animate-fade-in-up opacity-0" style={{ animationDelay: "200ms" }}>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-2">In Stock Items</p>
+                <p className="text-4xl font-display font-bold text-foreground">{stats.inStock}</p>
+              </div>
+              <div className="w-12 h-12 rounded-xl bg-primary/15 flex items-center justify-center">
+                <CheckCircle className="w-6 h-6 text-primary" />
               </div>
             </div>
+          </div>
 
-            {/* Product Expired */}
-            <div 
-              className="relative overflow-hidden bg-gradient-to-br from-red-50 to-red-100 border border-red-200 rounded-2xl p-6 hover:shadow-lg transition-all duration-300 animate-fade-in-up opacity-0 cursor-pointer" 
-              style={{ animationDelay: "300ms" }}
-              onClick={() => {
-                setShowExpiredOnly(!showExpiredOnly);
-                setShowLowStockOnly(false); // Reset low stock filter
-                setSelectedCategory("All"); // Reset category
-              }}
-            >
-              <div className="absolute top-0 right-0 w-20 h-20 bg-red-200/20 rounded-full -mr-10 -mt-10"></div>
-              <div className="relative">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="w-12 h-12 rounded-xl bg-red-500/10 flex items-center justify-center">
-                    <AlertTriangle className="w-6 h-6 text-red-600" />
-                  </div>
-                  <span className="text-xs font-medium text-red-600 bg-red-100 px-2 py-1 rounded-full">Alert</span>
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-red-700 mb-1">Product Expired</p>
-                  <p className="text-3xl font-bold text-red-900">{stats.expired}</p>
-                  <p className="text-sm text-red-600 mt-1">Requires attention</p>
-                </div>
+          <div className="stat-card-light-warning animate-fade-in-up opacity-0" style={{ animationDelay: "300ms" }}>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-2">Expired Products</p>
+                <p className="text-4xl font-display font-bold text-foreground">{stats.expired}</p>
               </div>
-            </div>
-
-            {/* Nearest Expiration Date */}
-            <div 
-              className="relative overflow-hidden bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-200 rounded-2xl p-6 hover:shadow-lg transition-all duration-300 animate-fade-in-up opacity-0 cursor-pointer" 
-              style={{ animationDelay: "400ms" }}
-              onClick={() => {
-                // Filter to show products with nearest expiry dates
-                setSortKey("expiryDate");
-                setSortDirection("asc");
-                setShowExpiredOnly(false); // Reset expired filter
-                setShowLowStockOnly(false); // Reset low stock filter
-                setSelectedCategory("All"); // Reset category
-              }}
-            >
-              <div className="absolute top-0 right-0 w-20 h-20 bg-blue-200/20 rounded-full -mr-10 -mt-10"></div>
-              <div className="relative">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="w-12 h-12 rounded-xl bg-blue-500/10 flex items-center justify-center">
-                    <Calendar className="w-6 h-6 text-blue-600" />
-                  </div>
-                  <span className="text-xs font-medium text-blue-600 bg-blue-100 px-2 py-1 rounded-full">Upcoming</span>
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-blue-700 mb-1">Nearest Expiry</p>
-                  <p className="text-xl font-bold text-blue-900">
-                    {stats.nearestExpiry ? new Date(stats.nearestExpiry).toLocaleDateString('en-US', { 
-                      month: 'short', 
-                      day: 'numeric' 
-                    }) : 'N/A'}
-                  </p>
-                  <p className="text-sm text-blue-600 mt-1">
-                    {stats.nearestExpiryItem 
-                      ? `${stats.nearestExpiryItem.name} - ${stats.getDaysUntilExpiry(stats.nearestExpiry)} days`
-                      : 'No upcoming expiry'
-                    }
-                  </p>
-                </div>
+              <div className="w-12 h-12 rounded-xl bg-destructive/15 flex items-center justify-center">
+                <Package className="w-6 h-6 text-destructive" />
               </div>
             </div>
           </div>
         </div>
 
         {/* Filter Bar */}
-        <div className="bg-card border border-border rounded-xl p-6 mb-8 animate-fade-in-up opacity-0" style={{ animationDelay: "800ms" }}>
-          <div className="flex flex-col gap-6">
-            <div className="flex flex-col gap-4">
-              <div className="flex flex-col lg:flex-row gap-4 items-stretch lg:items-center">
-                {/* Scan Button */}
+        <div className="glass-card p-4 mb-6 animate-fade-in-up opacity-0" style={{ animationDelay: "400ms" }}>
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col lg:flex-row gap-4 items-stretch lg:items-center">
+              {/* Search */}
+              <div className="relative flex-1">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                <input
+                  type="text"
+                  placeholder="Search by name, batch no, or barcode..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="glass-input w-full pl-12 pr-4"
+                />
+              </div>
+
+              {/* Low Stock Toggle */}
+              <button
+                onClick={() => setShowLowStockOnly(!showLowStockOnly)}
+                className={`glass-button flex items-center gap-2 ${
+                  showLowStockOnly ? "bg-inventory-warning/30 border-inventory-warning" : ""
+                }`}
+              >
+                <Filter className="w-4 h-4" />
+                <span>Low Stock Only</span>
+              </button>
+
+              <AddProductDialog
+                isOpen={isAddDialogOpen}
+                onClose={() => setIsAddDialogOpen(false)}
+                onProductAdded={handleProductAdded}
+              />
+              <EditProductDialog
+                isOpen={isEditDialogOpen}
+                product={selectedProduct as unknown as Product}
+                onClose={() => setIsEditDialogOpen(false)}
+                onProductUpdated={handleProductUpdatedOrDeleted}
+                onProductDeleted={handleProductUpdatedOrDeleted}
+              />
+
+              {/* Export Button */}
+              <div className="relative z-10">
                 <button
-                  onClick={() => {
-                    // Placeholder for scan functionality
-                    alert('Scanner functionality would be implemented here');
-                  }}
-                  className="inline-flex items-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors font-medium"
+                  onClick={() => setIsExportMenuOpen(!isExportMenuOpen)}
+                  className="glass-button flex items-center gap-2"
                 >
-                  <Scan className="w-4 h-4" />
-                  <span className="whitespace-nowrap">Scan</span>
-                </button>
-
-                {/* Search */}
-                <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <input
-                    type="text"
-                    placeholder="Search by name, batch no, or barcode..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full h-11 pl-10 pr-4 bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all"
+                  <Download className="w-4 h-4" />
+                  <span>Export</span>
+                  <ChevronDown
+                    className={`w-4 h-4 transition-transform ${isExportMenuOpen ? "rotate-180" : ""}`}
                   />
-                </div>
+                </button>
+                {isExportMenuOpen && (
+                  <div className="absolute top-full right-0 mt-2 w-48 glass-card py-2 z-50 animate-scale-in">
+                    <button
+                      onClick={exportToCSV}
+                      className="w-full text-left px-4 py-2.5 hover:bg-muted transition-colors flex items-center gap-3 text-sm"
+                    >
+                      <FileText className="w-4 h-4 text-primary" />
+                      <span>Export CSV</span>
+                    </button>
+                    <button
+                      onClick={exportToExcel}
+                      className="w-full text-left px-4 py-2.5 hover:bg-muted transition-colors flex items-center gap-3 text-sm"
+                    >
+                      <FileSpreadsheet className="w-4 h-4 text-primary" />
+                      <span>Export Excel</span>
+                    </button>
+                    <button
+                      onClick={exportToPDF}
+                      className="w-full text-left px-4 py-2.5 hover:bg-muted transition-colors flex items-center gap-3 text-sm"
+                    >
+                      <FileText className="w-4 h-4 text-accent" />
+                      <span>Export PDF</span>
+                    </button>
+                  </div>
+                )}
+              </div>
 
-                {/* Low Stock Toggle */}
+              {/* View Toggle */}
+              <div className="flex items-center gap-2">
+                <button onClick={() => setViewMode('list')} className={`glass-button ${viewMode === 'list' ? 'bg-primary/20' : ''}`}>
+                  <List className="w-5 h-5" />
+                </button>
+                <button onClick={() => setViewMode('card')} className={`glass-button ${viewMode === 'card' ? 'bg-primary/20' : ''}`}>
+                  <LayoutGrid className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Add Product Button */}
+              <button onClick={() => setIsAddDialogOpen(true)} className="glass-button-primary flex items-center gap-2">
+                <Plus className="w-5 h-5" />
+                <span>Add Product</span>
+              </button>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              {categories.map((cat) => (
                 <button
-                  onClick={() => setShowLowStockOnly(!showLowStockOnly)}
-                  className={`inline-flex items-center gap-2 px-4 py-2.5 border border-border rounded-lg hover:bg-muted transition-colors font-medium ${
-                    showLowStockOnly ? "bg-orange-50 border-orange-200 text-orange-700" : "bg-background"
+                  key={cat}
+                  onClick={() => setSelectedCategory(cat)}
+                  className={`px-4 py-1.5 text-sm rounded-full transition-colors ${
+                    selectedCategory === cat ? 'bg-primary text-primary-foreground' : 'bg-muted hover:bg-muted/80'
                   }`}
                 >
-                  <Filter className="h-4 w-4" />
-                  <span className="whitespace-nowrap">Low Stock Only</span>
+                  {cat}
                 </button>
-
-                {/* View Toggle */}
-                <div className="flex items-center gap-1 bg-muted rounded-lg p-1">
-                  <button onClick={() => setViewMode('list')} className={`inline-flex items-center justify-center w-8 h-8 rounded transition-colors ${viewMode === 'list' ? 'bg-background shadow-sm' : 'hover:bg-background/50'}`}>
-                    <List className="w-4 h-4" />
-                  </button>
-                  <button onClick={() => setViewMode('card')} className={`inline-flex items-center justify-center w-8 h-8 rounded transition-colors ${viewMode === 'card' ? 'bg-background shadow-sm' : 'hover:bg-background/50'}`}>
-                    <LayoutGrid className="w-4 h-4" />
-                  </button>
-                </div>
-
-                {/* Add Product Button */}
-                <button onClick={() => setIsModalOpen(true)} className="inline-flex items-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors font-medium">
-                  <Plus className="w-4 h-4" />
-                  <span>Add Product</span>
-                </button>
-              </div>
-
-              {/* Category Buttons */}
-              <div className="flex items-center gap-2">
-                {categories.map((cat) => (
-                  <button
-                    key={cat}
-                    onClick={() => setSelectedCategory(cat)}
-                    className={`px-3 py-1.5 rounded-md transition-colors text-sm ${
-                      selectedCategory === cat
-                        ? "bg-[#ffc370] text-foreground"
-                        : "bg-muted hover:bg-muted/80 text-foreground"
-                    }`}
-                  >
-                    {cat}
-                  </button>
-                ))}
-              </div>
+              ))}
             </div>
           </div>
         </div>
@@ -735,75 +884,100 @@ const Inventory = () => {
         >
           {viewMode === 'list' ? (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="sticky top-0 z-10">
-                <tr className="bg-background">
+            <table className="modern-table">
+              <thead>
+                <tr>
                   {[
-                    { key: "id", label: "ID", align: "text-left" },
-                    { key: "name", label: "Product", align: "text-left" },
-                    { key: "price", label: "Price", align: "text-right" },
-                    { key: "stock", label: "Stock", align: "text-right" },
-                    { key: "category", label: "Category", align: "text-left" },
-                    { key: "expiryDate", label: "Expiry", align: "text-left" },
-                    { key: "status", label: "Status", align: "text-center" },
-                    { key: "batchNo", label: "Batch", align: "text-left" },
-                    { key: "barcode", label: "Barcode", align: "text-left" },
+                    { key: "name", label: "Product" },
+                    { key: "price", label: "Price" },
+                    { key: "stock", label: "Stock" },
+                    { key: "category", label: "Category" },
+                    { key: "expiryDate", label: "Expiry" },
+                    { key: "status", label: "Status" },
                   ].map((col, idx) => (
                     <th
                       key={col.key}
                       onClick={() => handleSort(col.key as SortKey)}
-                      className={`px-4 py-3 font-semibold text-muted-foreground bg-muted/50 border-b border-border cursor-pointer hover:bg-muted/70 transition-colors ${col.align} ${idx === 0 ? 'rounded-tl-lg' : ''} ${idx === 8 ? 'rounded-tr-lg' : ''}`}
+                      className={`cursor-pointer hover:bg-muted transition-colors ${idx === 0 ? 'rounded-tl-xl' : ''} ${idx === 5 ? 'rounded-tr-xl' : ''}`}
                     >
-                      <div className={`flex items-center gap-2 ${
-                        col.align === 'text-center' ? 'justify-center' : 
-                        col.align === 'text-right' ? 'justify-end' : 
-                        'justify-start'
-                      }`}>
-                        <span className="whitespace-nowrap">{col.label}</span>
+                      <div className="flex items-center gap-1.5">
+                        {col.label}
                         <ArrowUpDown
-                          className={`w-3 h-3 shrink-0 ${
+                          className={`w-3 h-3 ${
                             sortKey === col.key ? "text-primary" : "text-muted-foreground/50"
                           }`}
                         />
                       </div>
                     </th>
                   ))}
+                  <th className="text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-border">
-              {paginatedData.map((item, index) => (
+              <tbody>
+                {paginatedData.map((item, index) => (
                   <tr
                     key={item.id}
-                    className={`hover:bg-muted/20 ${getRowClassName(item)}`}
+                    className={`${getRowClassName(item)}`}
                     style={{ animationDelay: `${index * 50}ms` }}
                   >
-                    <td className="px-4 py-3 text-left font-mono text-xs text-muted-foreground w-20">{item.id}</td>
-                    <td className="px-4 py-3 text-left font-medium text-foreground min-w-40">{item.name}</td>
-                    <td className="px-4 py-3 text-right tabular-nums w-24">${item.price.toFixed(2)}</td>
-                    <td className="px-4 py-3 text-right w-20">
-                      <span className="font-medium tabular-nums text-foreground">
+                    <td>
+                      <button
+                        type="button"
+                        className="font-medium text-foreground hover:underline text-left"
+                        onClick={() => setDetailsProduct(item)}
+                      >
+                        {item.name}
+                      </button>
+                    </td>
+                    <td className="tabular-nums">${item.price.toFixed(2)}</td>
+                    <td>
+                      <span
+                        className={`font-semibold tabular-nums ${
+                          isExpired(item.expiryDate)
+                            ? "text-destructive"
+                            : isLowStock(item.stock, item.minStock)
+                              ? "text-accent"
+                              : "text-primary"
+                        }`}
+                      >
                         {item.stock}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-left text-muted-foreground w-24">{item.category}</td>
-                    <td className="px-4 py-3 text-left text-muted-foreground tabular-nums w-28">{item.expiryDate}</td>
-                    <td className="px-4 py-3 text-center w-24">
-                      <div className="flex justify-center">
-                        <span
-                          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap ${
-                            item.status === "In Stock"
-                              ? "bg-green-100 text-green-800"
-                              : item.status === "Low Stock"
-                                ? "bg-yellow-100 text-yellow-800"
-                                : "bg-red-100 text-red-800"
-                          }`}
-                        >
-                          {item.status}
-                        </span>
-                      </div>
+                    <td className="text-muted-foreground">{item.category}</td>
+                    <td className="text-muted-foreground tabular-nums">{item.expiryDate}</td>
+                    <td>{getStatusBadge(item.status)}</td>
+                    <td className="text-right space-x-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        onClick={() => {
+                          // Use first batch's underlying item id to load full product from DB if needed
+                          const batch = item.batches[0];
+                          const source = inventory.find((p) => p.id === batch.id) ?? null;
+                          setSelectedProduct(source);
+                          setIsEditDialogOpen(true);
+                        }}
+                        aria-label={`Edit ${item.name}`}
+                      >
+                        <X className="hidden" />
+                        <span className="text-xs font-medium">Edit</span>
+                      </Button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const batch = item.batches[0];
+                          const source = inventory.find((p) => p.id === batch.id) ?? null;
+                          if (source) {
+                            openRowDeleteDialog(source);
+                          }
+                        }}
+                        className="p-1 rounded-full hover:bg-muted text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background"
+                        aria-label={`More actions for ${item.name}`}
+                      >
+                        <MoreVertical className="w-4 h-4" />
+                      </button>
                     </td>
-                    <td className="px-4 py-3 text-left font-mono text-xs text-muted-foreground w-24">{item.batchNo}</td>
-                    <td className="px-4 py-3 text-left font-mono text-xs text-muted-foreground w-32">{item.barcode}</td>
                   </tr>
                 ))}
               </tbody>
@@ -812,25 +986,31 @@ const Inventory = () => {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 p-6">
               {paginatedData.map((item, index) => (
-                <div key={item.id} className="glass-card p-4 flex flex-col" style={{ animationDelay: `${index * 50}ms` }}>
-                  <div className="w-full h-40 bg-muted rounded-lg mb-4 flex items-center justify-center">
+                <div
+                  key={item.id}
+                  className={`glass-card p-4 flex flex-col ${getRowClassName(item)}`}
+                  style={{ animationDelay: `${index * 50}ms` }}
+                >
+                  <button
+                    type="button"
+                    className="w-full h-40 bg-muted rounded-lg mb-4 flex items-center justify-center overflow-hidden focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background"
+                    onClick={() => setDetailsProduct(item)}
+                  >
                     {item.imageUrl ? (
                       <img src={item.imageUrl} alt={item.name} className="w-full h-full object-cover rounded-lg" />
                     ) : (
                       <Package className="w-12 h-12 text-muted-foreground/40" />
                     )}
-                  </div>
-                  <h3 className="font-bold text-foreground mb-2">{item.name}</h3>
+                  </button>
+                  <h3 className="font-bold text-foreground mb-1">{item.name}</h3>
                   <p className="text-sm text-muted-foreground mb-2">{item.category}</p>
-                  <div className="flex justify-between items-center mb-2">
+                  <div className="flex justify-between items-center mb-1">
                     <span className="font-bold text-lg text-primary">${item.price.toFixed(2)}</span>
-                    <span className="font-semibold text-primary">{item.stock} in stock</span>
+                    <span className={`font-semibold ${isLowStock(item.stock, item.minStock) ? 'text-accent' : 'text-primary'}`}>
+                      {item.stock} in stock
+                    </span>
                   </div>
-                  <div className="text-xs text-muted-foreground">
-                    <p>Batch: {item.batchNo}</p>
-                    <p>Expiry: {item.expiryDate}</p>
-                    <p className="font-mono mt-1">{item.barcode}</p>
-                  </div>
+                  <p className="text-xs text-muted-foreground mb-2">Nearest expiry: {item.expiryDate}</p>
                   {getStatusBadge(item.status)}
                 </div>
               ))}
@@ -869,102 +1049,174 @@ const Inventory = () => {
           </div>
         </div>
       </div>
-
-      {/* Modal */}
-      {isModalOpen && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-card border border-border rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
-            {/* Close Button */}
-            <button
-              className="absolute top-4 right-4 w-9 h-9 rounded-full bg-muted flex items-center justify-center hover:bg-muted/80 transition-colors"
-              onClick={() => setIsModalOpen(false)}
-            >
-              <X className="w-4 h-4 text-muted-foreground" />
-            </button>
-
-            <div className="text-center mb-8">
-              <div className="w-14 h-14 rounded-xl bg-primary/15 flex items-center justify-center mx-auto mb-4">
-                <Plus className="w-7 h-7 text-primary" />
-              </div>
-              <h2 className="text-2xl font-display font-bold text-foreground">Add New Product</h2>
-              <p className="text-muted-foreground mt-2 text-sm">Fill in the product details below</p>
-            </div>
-
-            <form className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">Product Name</label>
-                  <input type="text" placeholder="Enter name" className="glass-input w-full" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">Price</label>
-                  <input type="number" placeholder="0.00" className="glass-input w-full" />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">Stock</label>
-                  <input type="number" placeholder="0" className="glass-input w-full" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">Category</label>
-                  <select className="glass-input w-full">
-                    {categories.filter((c) => c !== "All").map((cat) => (
-                      <option key={cat} value={cat}>
-                        {cat}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">Batch No.</label>
-                  <input type="text" placeholder="BT-XXXX-XXX" className="glass-input w-full" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">Expiry Date</label>
-                  <input type="date" className="glass-input w-full" />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">Product Image</label>
-                <div className="flex items-center justify-center w-full">
-                  <label htmlFor="dropzone-file" className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-lg cursor-pointer bg-muted/50 hover:bg-muted/80">
-                    <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                      <Upload className="w-8 h-8 mb-2 text-muted-foreground" />
-                      <p className="mb-2 text-sm text-muted-foreground"><span className="font-semibold">Click to upload</span> or drag and drop</p>
-                      <p className="text-xs text-muted-foreground">SVG, PNG, JPG or GIF (MAX. 800x400px)</p>
-                    </div>
-                    <input id="dropzone-file" type="file" className="hidden" />
-                  </label>
-                </div> 
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">Barcode</label>
-                <input type="text" placeholder="Enter barcode" className="glass-input w-full" />
-              </div>
-
-              <div className="flex flex-col sm:flex-row gap-3 pt-4">
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="glass-button w-full sm:flex-1"
-                >
-                  Cancel
-                </button>
-                <button type="submit" className="glass-button-primary w-full sm:flex-1">
-                  Add Product
-                </button>
-              </div>
-            </form>
+      <Dialog open={isAdminViewerOpen} onOpenChange={(open) => setIsAdminViewerOpen(open)}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Admin Data Viewer</DialogTitle>
+          </DialogHeader>
+          <div className="overflow-x-auto mt-4">
+            <table className="modern-table">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Name</th>
+                  <th>SKU</th>
+                  <th>Price</th>
+                  <th>Stock</th>
+                  <th>Category</th>
+                  <th>Expiry</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {adminMirror.map((item) => (
+                  <tr key={item.id}>
+                    <td className="font-mono text-xs text-muted-foreground">{item.id}</td>
+                    <td>{item.name}</td>
+                    <td>{item.sku}</td>
+                    <td className="tabular-nums">${item.price.toFixed(2)}</td>
+                    <td className="tabular-nums">{item.stock}</td>
+                    <td>{item.category}</td>
+                    <td className="tabular-nums">{item.expiryDate}</td>
+                    <td>{item.status}</td>
+                    <td>
+                      <button
+                        type="button"
+                        className="text-destructive text-sm hover:underline"
+                        onClick={() => handleAdminDelete(item.id)}
+                      >
+                        Delete
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+                {adminMirror.length === 0 && (
+                  <tr>
+                    <td colSpan={9} className="text-center py-6 text-muted-foreground text-sm">
+                      No products in admin viewer.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
           </div>
-        </div>
-      )}
+        </DialogContent>
+      </Dialog>
+      <Dialog open={!!detailsProduct} onOpenChange={(open) => { if (!open) setDetailsProduct(null); }}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{detailsProduct?.name}</DialogTitle>
+          </DialogHeader>
+          {detailsProduct && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
+              <div className="flex items-center justify-center bg-muted rounded-lg min-h-[240px]">
+                {detailsProduct.imageUrl ? (
+                  <img
+                    src={detailsProduct.imageUrl}
+                    alt={detailsProduct.name}
+                    className="max-h-80 w-full object-contain rounded-lg"
+                  />
+                ) : (
+                  <Package className="w-16 h-16 text-muted-foreground/40" />
+                )}
+              </div>
+              <div className="space-y-4">
+                <div>
+                  <p className="text-sm text-muted-foreground">Category</p>
+                  <p className="font-medium">{detailsProduct.category}</p>
+                </div>
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <p className="text-muted-foreground">Total stock</p>
+                    <p className="font-semibold">{detailsProduct.stock}</p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">Nearest expiry</p>
+                    <p className="font-semibold">{detailsProduct.expiryDate}</p>
+                  </div>
+                </div>
+                <div className="mt-2">
+                  <p className="text-sm font-semibold mb-2">Batches</p>
+                  <div className="border rounded-lg overflow-hidden">
+                    <table className="w-full text-sm">
+                      <thead className="bg-muted">
+                        <tr>
+                          <th className="px-3 py-2 text-left">Batch No.</th>
+                          <th className="px-3 py-2 text-left">Expiry</th>
+                          <th className="px-3 py-2 text-right">Stock</th>
+                          <th className="px-3 py-2 text-left">Status</th>
+                          <th className="px-3 py-2 text-left">Barcode</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {detailsProduct.batches.map((batch) => (
+                          <tr key={batch.id} className="border-t">
+                            <td className="px-3 py-2 font-mono text-xs">{batch.batchNo}</td>
+                            <td className="px-3 py-2 text-xs">{batch.expiryDate}</td>
+                            <td className="px-3 py-2 text-right tabular-nums">{batch.stock}</td>
+                            <td className="px-3 py-2 text-xs">{batch.status}</td>
+                            <td className="px-3 py-2 font-mono text-xs">{batch.barcode}</td>
+                          </tr>
+                        ))}
+                        {detailsProduct.batches.length === 0 && (
+                          <tr>
+                            <td colSpan={5} className="px-3 py-4 text-center text-muted-foreground text-xs">
+                              No batch information available.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+      <Dialog open={isRowDeleteOpen} onOpenChange={(open) => setIsRowDeleteOpen(open)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete Product</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 mt-2">
+            <p className="text-sm text-muted-foreground">
+              This action cannot be undone. To confirm, type
+              {" "}
+              <span className="font-mono font-semibold">
+                #{rowToDelete?.name ?? "ProductName"}
+              </span>
+              {" "}
+              below.
+            </p>
+            <input
+              type="text"
+              value={deleteConfirmText}
+              onChange={(e) => setDeleteConfirmText(e.target.value)}
+              className="glass-input w-full"
+              placeholder={`#${rowToDelete?.name ?? "ProductName"}`}
+            />
+          </div>
+          <DialogFooter className="pt-4">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setIsRowDeleteOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={handleConfirmRowDelete}
+              disabled={!rowToDelete || deleteConfirmText !== `#${rowToDelete.name}`}
+            >
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
