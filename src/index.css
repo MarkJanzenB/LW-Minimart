@@ -203,4 +203,77 @@ All colors MUST be HSL.
       transform: translateY(0);
     }
   }
+
+  .stat-card-warning {
+    @apply bg-orange-50 border border-orange-200 rounded-xl p-5;
+  }
+  .stat-card-success {
+    @apply bg-green-50 border border-green-200 rounded-xl p-5;
+  }
+  .stat-card-light-warning {
+    @apply bg-red-50 border border-red-200 rounded-xl p-5;
+  }
+  .stat-card-info {
+    @apply bg-blue-50 border border-blue-200 rounded-xl p-5;
+  }
+  .glass-input, .glass-button {
+    @apply border border-border rounded-lg px-4 py-2 bg-card focus:ring-2 focus:ring-ring outline-none shadow-sm transition-all;
+  }
+  .glass-button-primary {
+    @apply bg-primary text-primary-foreground hover:bg-primary/90 border border-primary rounded-lg px-4 py-2 shadow-sm transition-all;
+  }
+  .modern-table {
+    @apply w-full text-sm text-left;
+  }
+  .modern-table th {
+    @apply p-4 font-medium bg-muted/50;
+  }
+  .modern-table td {
+    @apply p-4 border-b border-border;
+  }
+  .badge-expired {
+    @apply px-2 py-1 text-xs rounded-full font-medium bg-red-100 text-red-700;
+  }
+  .badge-low-stock {
+    @apply px-2 py-1 text-xs rounded-full font-medium bg-orange-100 text-orange-700;
+  }
+  .badge-in-stock {
+    @apply px-2 py-1 text-xs rounded-full font-medium bg-green-100 text-green-700;
+  }
+  .row-expired {
+    @apply bg-red-50;
+  }
+  .row-expired:hover {
+    @apply bg-red-100;
+  }
+  .row-low-stock {
+    @apply bg-orange-50;
+  }
+  .row-low-stock:hover {
+    @apply bg-orange-100;
+  }
+  .row-in-stock {
+    @apply bg-green-50;
+  }
+  .row-in-stock:hover {
+    @apply bg-green-100;
+  }
+  .glass-modal {
+    @apply bg-card rounded-2xl shadow-lg;
+  }
+
+  @keyframes scaleIn {
+    from {
+      opacity: 0;
+      transform: scale(0.95);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  .animate-scale-in {
+    animation: scaleIn 0.2s ease-out forwards;
+  }
 }

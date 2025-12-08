@@ -1,9 +1,28 @@
+import { useEffect } from "react";
 import { AppSidebar } from "@/components/AppSidebar";
 import { SidebarProvider } from "@/components/ui/sidebar";
-import { Outlet } from "react-router-dom";
-import { ModeToggle } from "@/components/ModeToggle";
+import { Outlet, useNavigate } from "react-router-dom";
 
 const Layout = () => {
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const ensureOwnerExists = async () => {
+      try {
+        if (typeof window !== 'undefined' && (window as any).api?.auth) {
+          const { hasOwner } = await (window as any).api.auth.hasOwner();
+          if (!hasOwner) {
+            navigate("/owner-setup");
+          }
+        }
+      } catch (error) {
+        console.error("Error checking owner existence in layout:", error);
+      }
+    };
+
+    ensureOwnerExists();
+  }, [navigate]);
+
   return (
     <SidebarProvider>
       <div className="flex h-screen w-full bg-background overflow-hidden">

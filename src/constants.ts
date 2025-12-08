@@ -1,4 +1,4 @@
-import { Product } from './types';
+import { Product, Transaction } from './integrations/supabase/types';
 
 export const TAX_RATE = 0.12;
 
@@ -111,4 +111,46 @@ export const MOCK_PRODUCTS: Product[] = [
     category: 'Grains',
     color: 'bg-stone-100'
   }
+];
+
+export const MOCK_TRANSACTIONS: Transaction[] = [
+  {
+    id: 'TXN-20230115-001',
+    date: new Date('2023-01-15T10:30:00'),
+    items: [
+      { ...MOCK_PRODUCTS[0], quantity: 2 },
+      { ...MOCK_PRODUCTS[2], quantity: 1 },
+    ],
+    subtotal: 6.50,
+    tax: 0.78,
+    total: 7.28,
+    paymentMethod: 'cash',
+    status: 'Completed',
+  },
+  {
+    id: 'TXN-20230115-002',
+    date: new Date('2023-01-15T11:05:00'),
+    items: [
+      { ...MOCK_PRODUCTS[4], quantity: 1 },
+      { ...MOCK_PRODUCTS[5], quantity: 1 },
+    ],
+    subtotal: 9.24,
+    tax: 1.11,
+    total: 10.35,
+    paymentMethod: 'qr',
+    referenceNumber: 'QR-20230115-002',
+    status: 'Completed',
+  },
+  {
+    id: 'TXN-20230114-001',
+    date: new Date('2023-01-14T18:15:00'),
+    items: [
+      { ...MOCK_PRODUCTS[1], quantity: 3 },
+    ],
+    subtotal: 8.97,
+    tax: 1.08,
+    total: 10.05,
+    paymentMethod: 'cash',
+    status: 'Refunded',
+  },
 ];

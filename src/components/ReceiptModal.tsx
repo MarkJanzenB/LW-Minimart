@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { Transaction } from '@/integrations/supabase/types';
 import { Printer, CheckCircle, Download } from 'lucide-react';
+import { formatCurrency } from '@/hooks/use-currency';
 
 interface ReceiptModalProps {
   transaction: Transaction;
@@ -51,7 +52,7 @@ const ReceiptModal: React.FC<ReceiptModalProps> = ({ transaction, onClose }) => 
             {transaction.items.map(item => (
               <div key={item.id} className="flex justify-between">
                 <span className="truncate w-32">{item.quantity}x {item.name}</span>
-                <span>₱{(item.price * item.quantity).toFixed(2)}</span>
+                <span>{formatCurrency(item.price * item.quantity)}</span>
               </div>
             ))}
           </div>
@@ -59,24 +60,32 @@ const ReceiptModal: React.FC<ReceiptModalProps> = ({ transaction, onClose }) => 
           <div className="font-mono text-sm space-y-2 mb-6">
              <div className="flex justify-between font-bold">
                <span>Total Due</span>
-               <span>₱{transaction.total.toFixed(2)}</span>
+               <span>{formatCurrency(transaction.total)}</span>
              </div>
              {transaction.paymentMethod === 'cash' && (
                <>
                 <div className="flex justify-between text-stone-500">
                   <span>Cash Received</span>
-                  <span>₱{(transaction.cashReceived || 0).toFixed(2)}</span>
+                  <span>{formatCurrency(transaction.cashReceived || 0)}</span>
                 </div>
                 <div className="flex justify-between font-bold text-lg mt-2 pt-2 border-t border-stone-100">
                   <span>Change</span>
-                  <span>₱{(transaction.change || 0).toFixed(2)}</span>
+                  <span>{formatCurrency(transaction.change || 0)}</span>
                 </div>
                </>
              )}
-             {transaction.paymentMethod === 'card' && (
-                <div className="flex justify-between text-stone-500">
-                   <span>Payment Method</span>
-                   <span>CARD ****</span>
+             {transaction.paymentMethod === 'qr' && (
+                <div className="space-y-1">
+                   <div className="flex justify-between text-stone-500">
+                     <span>Payment Method</span>
+                     <span>QR Code</span>
+                   </div>
+                   {transaction.referenceNumber && (
+                     <div className="flex justify-between text-stone-500">
+                       <span>Reference No.</span>
+                       <span>{transaction.referenceNumber}</span>
+                     </div>
+                   )}
                 </div>
              )}
           </div>

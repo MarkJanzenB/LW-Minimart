@@ -6,54 +6,71 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 
-const SignIn = () => {
+const OwnerSetup = () => {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
 
   useEffect(() => {
-    const checkUserAndOwner = async () => {
+    const checkOwner = async () => {
       try {
-        const { hasOwner } = await (window as any).api.auth.hasOwner();
-        if (!hasOwner) {
-          navigate("/owner-setup");
-          return;
-        }
-
-        const { user } = await (window as any).api.auth.getCurrentUser();
-        if (user) {
-          navigate("/dashboard");
+        if (typeof window !== 'undefined' && (window as any).api?.auth) {
+          const { hasOwner } = await (window as any).api.auth.hasOwner();
+          if (hasOwner) {
+            navigate("/signin");
+          }
         }
       } catch (error) {
-        console.error("Error checking current user:", error);
+        console.error("Error checking owner status:", error);
       }
     };
-    checkUserAndOwner();
+
+    checkOwner();
   }, [navigate]);
 
-  const handleSignIn = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (password !== confirmPassword) {
+      toast({
+        variant: "destructive",
+        title: "Passwords don't match",
+        description: "Please make sure your passwords match.",
+      });
+      return;
+    }
+
+    if (password.length < 6) {
+      toast({
+        variant: "destructive",
+        title: "Password too short",
+        description: "Password must be at least 6 characters long.",
+      });
+      return;
+    }
+
     setLoading(true);
 
     try {
-      const response = await (window as any).api.auth.login(username, password);
+      const response = await (window as any).api.auth.initializeOwner(username, password);
 
       if (!response.success) {
-        throw new Error(response.message || "Invalid credentials");
+        throw new Error(response.message || "Unable to create owner account");
       }
 
       toast({
-        title: "Welcome back!",
-        description: "You've successfully signed in.",
+        title: "Owner initialized",
+        description: "You can now sign in with your new owner account.",
       });
-      navigate("/dashboard");
+      navigate("/signin");
     } catch (error: any) {
       toast({
         variant: "destructive",
-        title: "Error signing in",
-        description: error.message || "Invalid username or password",
+        title: "Error creating owner account",
+        description: error.message || "Something went wrong. Please try again.",
       });
     } finally {
       setLoading(false);
@@ -97,15 +114,18 @@ const SignIn = () => {
           </div>
 
           {/* Heading */}
-          <h1 className="text-4xl font-semibold mb-12 text-foreground leading-tight">
-            Welcome, login to<br />your account.
+          <h1 className="text-4xl font-semibold mb-4 text-foreground leading-tight">
+            Create your owner account
           </h1>
+          <p className="text-sm text-muted-foreground mb-12">
+            This step runs only once. The owner account will have full access to all settings and reports.
+          </p>
 
           {/* Form */}
-          <form onSubmit={handleSignIn} className="space-y-6">
+          <form onSubmit={handleSubmit} className="space-y-6">
             <div className="space-y-2">
               <Label htmlFor="username" className="text-sm text-muted-foreground">
-                Username
+                Owner Username
               </Label>
               <Input
                 id="username"
@@ -125,7 +145,7 @@ const SignIn = () => {
               <Input
                 id="password"
                 type="password"
-                placeholder="Your Password"
+                placeholder="Password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
@@ -133,21 +153,29 @@ const SignIn = () => {
               />
             </div>
 
-            <div className="flex items-center justify-between pt-2">
-              <Button 
-                type="submit" 
+            <div className="space-y-2">
+              <Label htmlFor="confirmPassword" className="text-sm text-muted-foreground">
+                Confirm Password
+              </Label>
+              <Input
+                id="confirmPassword"
+                type="password"
+                placeholder="Confirm Password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                required
+                className="h-12 bg-muted border-0 rounded-lg"
+              />
+            </div>
+
+            <div className="pt-2">
+              <Button
+                type="submit"
                 disabled={loading}
-                className="h-12 px-8 rounded-full bg-foreground hover:bg-foreground/90 text-background"
+                className="h-12 w-full rounded-full bg-foreground hover:bg-foreground/90 text-background"
               >
-                {loading ? "Signing in..." : "Sign In Now"}
+                {loading ? "Creating owner..." : "Create Owner Account"}
               </Button>
-              
-              <Link 
-                to="/signup" 
-                className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-              >
-                Create account?
-              </Link>
             </div>
           </form>
 
@@ -161,4 +189,4 @@ const SignIn = () => {
   );
 };
 
-export default SignIn;
+export default OwnerSetup;
