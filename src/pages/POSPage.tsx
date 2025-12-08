@@ -9,23 +9,42 @@ import ProductCard from '@/components/ProductCard';
 import CartItemComponent from '@/components/CartItem';
 import CheckoutModal from '@/components/CheckoutModal';
 import ReceiptModal from '@/components/ReceiptModal';
+import BarcodeScannerModal from '@/components/BarcodeScannerModal';
 
 function PosPage() {
   const [view, setView] = useState<ViewState>('pos');
+  const [products, setProducts] = useState<Product[]>(MOCK_PRODUCTS.map(p => ({...p, stock_quantity: p.stock, barcode: p.code})));
   const [cart, setCart] = useState<CartItem[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [transaction, setTransaction] = useState<Transaction | null>(null);
   const [selectedCartItemIndex, setSelectedCartItemIndex] = useState<number | null>(null);
-  
-  const searchInputRef = useRef<HTMLInputElement>(null);
+  const [selectedProductIndex, setSelectedProductIndex] = useState<number | null>(0);
+  const [activeList, setActiveList] = useState<'products' | 'cart'>('products');
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
 
-  const filteredProducts = useMemo(() => {
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const cartItemsRef = useRef<(HTMLDivElement | null)[]>([]);
+  const productItemsRef = useRef<(HTMLDivElement | null)[]>([]);
+
+  const displayedProducts = useMemo(() => {
+    const cartQuantities = cart.reduce((acc, item) => {
+      acc[item.id] = item.quantity;
+      return acc;
+    }, {} as { [key: string]: number });
+
+    const updatedProducts = products.map(p => ({
+      ...p,
+      stock_quantity: p.stock - (cartQuantities[p.id] || 0),
+    }));
+
     const query = searchQuery.toLowerCase();
-    return MOCK_PRODUCTS.filter(p => 
+    if (!query) return updatedProducts;
+
+    return updatedProducts.filter(p => 
       p.name.toLowerCase().includes(query) || 
-      p.code.toLowerCase().includes(query)
+      (p.barcode && p.barcode.toLowerCase().includes(query))
     );
-  }, [searchQuery]);
+  }, [searchQuery, products, cart]);
 
   const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
   const tax = subtotal * TAX_RATE;
@@ -33,20 +52,27 @@ function PosPage() {
   
   // Cart Actions
   const addToCart = (product: Product) => {
-    setCart(prev => {
-      const existingIndex = prev.findIndex(item => item.id === product.id);
-      if (existingIndex !== -1) {
-        setSelectedCartItemIndex(existingIndex);
-        return prev.map((item, index) => 
-          index === existingIndex 
-            ? { ...item, quantity: item.quantity + 1 } 
-            : item
-        );
-      }
-      setSelectedCartItemIndex(prev.length);
-      return [...prev, { ...product, quantity: 1 }];
-    });
-    playBeep();
+    const cartItem = cart.find(item => item.id === product.id);
+    const currentQuantityInCart = cartItem ? cartItem.quantity : 0;
+
+    if (product.stock_quantity > currentQuantityInCart) {
+      setCart(prev => {
+        const existingIndex = prev.findIndex(item => item.id === product.id);
+        if (existingIndex !== -1) {
+          setSelectedCartItemIndex(existingIndex);
+          return prev.map((item, index) => 
+            index === existingIndex 
+              ? { ...item, quantity: item.quantity + 1 } 
+              : item
+          );
+        }
+        setSelectedCartItemIndex(prev.length);
+        return [...prev, { ...product, quantity: 1 }];
+      });
+      playBeep();
+    } else {
+      console.log('Product is out of stock');
+    }
   };
 
   const updateQuantity = (id: string, delta: number) => {
@@ -69,7 +95,7 @@ function PosPage() {
     if (cart.length > 0) setView('checkout');
   };
 
-  const finalizeTransaction = (amountReceived: number, method: 'cash' | 'card') => {
+  const finalizeTransaction = (amountReceived: number, method: 'cash' | 'qr', referenceNumber?: string) => {
     const newTransaction: Transaction = {
       id: Date.now().toString(),
       date: new Date(),
@@ -77,10 +103,12 @@ function PosPage() {
       subtotal,
       tax,
       total,
-      cashReceived: amountReceived,
-      change: amountReceived - total,
-      paymentMethod: method
+      cashReceived: method === 'cash' ? amountReceived : undefined,
+      change: method === 'cash' ? amountReceived - total : undefined,
+      paymentMethod: method,
+      referenceNumber: method === 'qr' ? referenceNumber : undefined
     };
+    // Simulate successful transaction
     setTransaction(newTransaction);
     setView('receipt');
     setCart([]);
@@ -117,83 +145,105 @@ function PosPage() {
     osc.stop(ctx.currentTime + 0.3);
   };
 
-  // Keyboard Shortcuts
-  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter' && filteredProducts.length > 0) {
+  const handleSearchEnter = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && searchQuery) {
       e.preventDefault();
-      addToCart(filteredProducts[0]);
-      setSearchQuery('');
-      searchInputRef.current?.blur();
+      const product = products.find(p => p.barcode === searchQuery);
+      if (product) {
+        addToCart(product);
+        setSearchQuery('');
+      } else {
+        // Handle product not found by maybe showing a toast notification
+        console.log('Product not found');
+      }
     }
   };
 
   useEffect(() => {
     const handleGlobalKeys = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
-        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-          // Allow arrow keys to navigate search results or text, so don't preventDefault
-        } else {
-          // return; // Don't process other shortcuts if inside an input
-        }
-      }
-      // F2: Search
-      if (e.key === 'F2') {
+      if (e.key === ' ' || e.key === 'Spacebar') {
         e.preventDefault();
-        searchInputRef.current?.focus();
+        setIsScannerOpen(true);
       }
-      // F3: Scan (Simulate by focusing search or adding random item? Focus search is standard)
-      if (e.key === 'F3') {
-        e.preventDefault();
-        searchInputRef.current?.focus();
-        // Ideally this toggles a "Scan Mode", but focusing search works for barcode scanners acting as keyboards
-      }
-      // F1: Checkout (Cash)
+
       if (e.key === 'F1') {
         e.preventDefault();
         if (view === 'pos' && cart.length > 0) handleCheckout();
       }
-      // Escape: Clear Cart
-      if (e.key === 'Escape') {
+      if (e.key === 'F2') {
         e.preventDefault();
-        if (cart.length > 0) clearCart();
+        searchInputRef.current?.focus();
       }
-      // F12: Checkout
-      if (e.key === 'F12') {
+      if (e.key === '`') {
         e.preventDefault();
-        if (view === 'pos' && cart.length > 0) handleCheckout();
+        setActiveList('cart');
+        setSelectedCartItemIndex(0);
+      }
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        setActiveList(prev => (prev === 'products' ? 'cart' : 'products'));
       }
 
-      // Arrow navigation for cart
-      if (cart.length > 0) {
-        if (e.key === 'ArrowDown') {
-          e.preventDefault();
-          setSelectedCartItemIndex(prev => (prev === null || prev === cart.length - 1) ? 0 : prev + 1);
-          searchInputRef.current?.blur();
-        }
+      if (activeList === 'products') {
         if (e.key === 'ArrowUp') {
           e.preventDefault();
-          setSelectedCartItemIndex(prev => (prev === null || prev === 0) ? cart.length - 1 : prev - 1);
-          searchInputRef.current?.blur();
-        }
-        if (e.key === 'ArrowRight' && selectedCartItemIndex !== null) {
+          setSelectedProductIndex(prev => (prev !== null ? Math.max(0, prev - 4) : 0));
+        } else if (e.key === 'ArrowDown') {
           e.preventDefault();
-          updateQuantity(cart[selectedCartItemIndex].id, 1);
-        }
-        if (e.key === 'ArrowLeft' && selectedCartItemIndex !== null) {
+          setSelectedProductIndex(prev => (prev !== null ? Math.min(displayedProducts.length - 1, prev + 4) : 0));
+        } else if (e.key === 'ArrowLeft') {
           e.preventDefault();
-          updateQuantity(cart[selectedCartItemIndex].id, -1);
+          setSelectedProductIndex(prev => (prev !== null ? Math.max(0, prev - 1) : 0));
+        } else if (e.key === 'ArrowRight') {
+          e.preventDefault();
+          setSelectedProductIndex(prev => (prev !== null ? Math.min(displayedProducts.length - 1, prev + 1) : 0));
+        } else if (e.key === 'Enter') {
+          e.preventDefault();
+          if (selectedProductIndex !== null) {
+            addToCart(displayedProducts[selectedProductIndex]);
+          }
+        }
+      } else if (activeList === 'cart') {
+        if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          setSelectedCartItemIndex(prev => (prev !== null ? Math.max(0, prev - 1) : 0));
+        } else if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          setSelectedCartItemIndex(prev => (prev !== null ? Math.min(cart.length - 1, prev + 1) : 0));
+        } else if (e.key === 'ArrowLeft') {
+          e.preventDefault();
+          if (selectedCartItemIndex !== null) {
+            updateQuantity(cart[selectedCartItemIndex].id, -1);
+          }
+        } else if (e.key === 'ArrowRight') {
+          e.preventDefault();
+          if (selectedCartItemIndex !== null) {
+            updateQuantity(cart[selectedCartItemIndex].id, 1);
+          }
+        } else if (e.key === 'Backspace') {
+          e.preventDefault();
+          if (selectedCartItemIndex !== null) {
+            removeFromCart(cart[selectedCartItemIndex].id);
+          }
         }
       }
     };
 
     window.addEventListener('keydown', handleGlobalKeys);
     return () => window.removeEventListener('keydown', handleGlobalKeys);
-  }, [view, cart, selectedCartItemIndex]);
+  }, [view, cart, selectedCartItemIndex, activeList, displayedProducts, selectedProductIndex]);
+
+  useEffect(() => {
+    if (activeList === 'cart' && selectedCartItemIndex !== null) {
+      cartItemsRef.current[selectedCartItemIndex]?.focus();
+    } else if (activeList === 'products' && selectedProductIndex !== null) {
+      productItemsRef.current[selectedProductIndex]?.focus();
+    }
+  }, [selectedCartItemIndex, selectedProductIndex, activeList]);
 
   return (
     <>
       
-      {/* Header Section */}
       <div className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-10">
         <div className="px-8 py-6 flex items-center justify-between">
           <div className="flex items-center gap-4">
@@ -205,21 +255,15 @@ function PosPage() {
             </div>
           </div>
           <div className="text-sm text-muted-foreground font-mono space-x-4">
-            <span>F2: Search</span>
-            <span>F3: Scan</span>
             <span>F1: Pay</span>
-            <span>Esc: Clear</span>
+            <span>F2: Search</span>
+            <span>Tab: Switch Lists</span>
           </div>
         </div>
       </div>
 
-      {/* Main Content Area */}
       <div className="flex-1 flex overflow-hidden h-[calc(100vh-6.5rem)]">
-        
-        {/* Left Panel: Search & Product Grid */}
         <div className="flex-1 flex flex-col p-8 pr-2">
-           
-           {/* Search Bar */}
            <div className="flex gap-2 mb-4">
              <div className="flex-1 relative">
                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-stone-400 w-5 h-5" />
@@ -230,22 +274,32 @@ function PosPage() {
                  className="w-full pl-12 pr-4 py-3 rounded-lg border border-border bg-card focus:ring-2 focus:ring-ring focus:border-ring outline-none shadow-sm transition-all"
                  value={searchQuery}
                  onChange={(e) => setSearchQuery(e.target.value)}
-                 onKeyDown={handleSearchKeyDown}
+                 onKeyDown={handleSearchEnter}
                  autoFocus
                />
              </div>
-             <button className="px-6 py-2 bg-card border border-border rounded-lg font-semibold text-muted-foreground flex items-center gap-2 hover:bg-muted transition-colors shadow-sm">
+             <button 
+                onClick={() => setIsScannerOpen(true)}
+                className="px-6 py-2 bg-card border border-border rounded-lg font-semibold text-muted-foreground flex items-center gap-2 hover:bg-muted transition-colors shadow-sm">
+
                 <Scan size={18} /> Scan
              </button>
            </div>
 
-           {/* Product Grid */}
            <div className="flex-1 overflow-y-auto pr-2 pb-20">
              <div className="grid grid-cols-4 gap-4">
-               {filteredProducts.map(product => (
-                 <ProductCard key={product.id} product={product} onClick={addToCart} />
+               {displayedProducts.map((product, index) => (
+                 <div 
+                  key={product.id} 
+                  ref={el => productItemsRef.current[index] = el}
+                  tabIndex={-1}
+                  className={`rounded-lg focus:outline-none focus:ring-2 m-1 ${activeList === 'products' && selectedProductIndex === index ? 'ring-earth-yellow' : 'ring-transparent'} flex flex-col`}
+                  onClick={() => addToCart(product)}
+                >
+                  <ProductCard product={product} onClick={() => {}} />
+                </div>
                ))}
-               {filteredProducts.length === 0 && (
+               {displayedProducts.length === 0 && (
                  <div className="col-span-full flex flex-col items-center justify-center text-stone-400 mt-20">
                     <Search size={48} className="mb-4 opacity-20" />
                     <p>No products found.</p>
@@ -255,10 +309,7 @@ function PosPage() {
            </div>
         </div>
 
-        {/* Right Panel: Cart */}
         <div className="w-[35%] bg-card border-l border-border flex flex-col shadow-xl z-10 relative">
-          
-          {/* Cart Header */}
           <div className="p-4 bg-muted/50 border-b border-border">
              <div className="flex items-center gap-3">
                <div className="bg-primary p-2 rounded-lg text-primary-foreground">
@@ -271,7 +322,6 @@ function PosPage() {
              </div>
           </div>
 
-          {/* Cart Items List */}
           <div className="flex-1 overflow-y-auto p-4 space-y-2">
             {cart.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-stone-400 space-y-4 opacity-60">
@@ -280,19 +330,24 @@ function PosPage() {
               </div>
             ) : (
               cart.map((item, index) => (
-                <CartItemComponent 
+                <div 
                   key={item.id} 
-                  item={item} 
-                  onIncrement={() => addToCart(item)}
-                  onDecrement={() => updateQuantity(item.id, -1)}
-                  onRemove={() => removeFromCart(item.id)}
-                  isSelected={selectedCartItemIndex === index}
-                />
+                  ref={el => cartItemsRef.current[index] = el}
+                  tabIndex={-1} 
+                  className={`rounded-lg focus:outline-none focus:ring-2 ${activeList === 'cart' && selectedCartItemIndex === index ? 'ring-earth-yellow' : 'ring-transparent'}`}
+                >
+                  <CartItemComponent 
+                    item={item} 
+                    onIncrement={() => updateQuantity(item.id, 1)}
+                    onDecrement={() => updateQuantity(item.id, -1)}
+                    onRemove={() => removeFromCart(item.id)}
+                    isSelected={activeList === 'cart' && selectedCartItemIndex === index}
+                  />
+                </div>
               ))
             )}
           </div>
 
-          {/* Cart Summary & Actions */}
           <div className="p-6 bg-card border-t border-border shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
              <div className="space-y-2 text-sm mb-6">
                <div className="flex justify-between text-stone-500">
@@ -338,6 +393,18 @@ function PosPage() {
           onClose={() => setView('pos')}
         />
       )}
+
+      <BarcodeScannerModal 
+        isOpen={isScannerOpen}
+        onClose={() => setIsScannerOpen(false)}
+        onScan={(barcode) => {
+          const product = products.find(p => p.barcode === barcode);
+          if (product) {
+            addToCart(product);
+          }
+          setIsScannerOpen(false);
+        }}
+      />
 
     </>
   );

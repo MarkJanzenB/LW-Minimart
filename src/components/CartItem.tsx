@@ -13,7 +13,7 @@ interface CartItemProps {
 
 const CartItem: React.FC<CartItemProps> = ({ item, onIncrement, onDecrement, onRemove, isSelected }) => {
   return (
-    <div className={`flex items-center p-3 rounded-lg border mb-2 shadow-sm transition-all duration-200 ${isSelected ? 'bg-blue-50 border-blue-200 ring-2 ring-blue-300' : 'bg-white border-stone-100'}`}>
+    <div className={`flex items-center p-3 rounded-lg border mb-2 shadow-sm transition-all duration-200 ${isSelected ? 'bg-earth-yellow/20 border-earth-yellow/50 ring-2 ring-earth-yellow' : 'bg-white border-stone-100'}`}>
       <div className={`w-12 h-12 ${item.color || 'bg-stone-100'} rounded-md flex items-center justify-center mr-3 shrink-0`}>
          <Package className="w-6 h-6 text-stone-400 opacity-50" />
       </div>

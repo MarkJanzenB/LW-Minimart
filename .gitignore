@@ -40,3 +40,6 @@ coverage/
 
 # System Files
 Thumbs.db
+
+# Database
+*.db

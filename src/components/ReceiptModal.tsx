@@ -74,10 +74,18 @@ const ReceiptModal: React.FC<ReceiptModalProps> = ({ transaction, onClose }) => 
                 </div>
                </>
              )}
-             {transaction.paymentMethod === 'card' && (
-                <div className="flex justify-between text-stone-500">
-                   <span>Payment Method</span>
-                   <span>CARD ****</span>
+             {transaction.paymentMethod === 'qr' && (
+                <div className="space-y-1">
+                   <div className="flex justify-between text-stone-500">
+                     <span>Payment Method</span>
+                     <span>QR Code</span>
+                   </div>
+                   {transaction.referenceNumber && (
+                     <div className="flex justify-between text-stone-500">
+                       <span>Reference No.</span>
+                       <span>{transaction.referenceNumber}</span>
+                     </div>
+                   )}
                 </div>
              )}
           </div>
