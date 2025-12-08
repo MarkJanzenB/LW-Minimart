@@ -1,6 +1,7 @@
 import React from 'react';
 import { Product } from '@/integrations/supabase/types';
 import { Package } from 'lucide-react';
+import { formatCurrency } from '@/hooks/use-currency';
 
 interface ProductCardProps {
   product: Product;
@@ -29,7 +30,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onClick }) => {
 
       <div className="flex items-end justify-between w-full mt-2">
         <span className="font-bold text-lg text-foreground">
-          ₱{product.price.toFixed(2)}
+          {formatCurrency(product.price)}
         </span>
         <span className={`text-xs px-2 py-1 rounded-full ${isLowStock ? 'bg-destructive/10 text-destructive font-medium' : 'bg-muted text-muted-foreground'}`}>
           {product.stock_quantity ?? product.stock} left

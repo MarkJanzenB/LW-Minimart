@@ -1,7 +1,9 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Calendar, Search, SlidersHorizontal } from 'lucide-react';
+import { Calendar, Search, SlidersHorizontal, Receipt } from 'lucide-react';
+import { SidebarTrigger } from '@/components/ui/sidebar';
 import { MOCK_TRANSACTIONS } from '@/constants';
 import { Transaction } from '@/integrations/supabase/types';
+import { formatCurrency } from '@/hooks/use-currency';
 
 function TransactionHistoryPage() {
   const [transactions, setTransactions] = useState<Transaction[]>(MOCK_TRANSACTIONS);
@@ -29,8 +31,19 @@ function TransactionHistoryPage() {
   };
 
   return (
-    <div className="p-8 h-full flex flex-col">
-      <h1 className="text-3xl font-bold text-foreground mb-6">Transaction History</h1>
+    <>
+      {/* Header Section */}
+      <div className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-10">
+        <div className="px-8 py-6 flex items-center gap-4">
+          <SidebarTrigger />
+          <Receipt className="w-5 h-5 text-foreground" />
+          <div>
+            <h1 className="text-3xl font-bold text-foreground">Transaction History</h1>
+            <p className="text-muted-foreground mt-1">View all your POS transactions</p>
+          </div>
+        </div>
+      </div>
+      <div className="p-8 h-full flex flex-col">
       
       {/* Filter and Sort Controls */}
       <div className="flex items-center justify-between mb-6 bg-card p-4 rounded-lg border border-border">
@@ -87,7 +100,7 @@ function TransactionHistoryPage() {
                 </td>
                 <td className="p-4 text-muted-foreground">{new Date(t.date).toLocaleString()}</td>
                 <td className="p-4 text-muted-foreground">{t.items.reduce((sum, i) => sum + i.quantity, 0)}</td>
-                <td className="p-4 font-semibold text-right">₱{t.total.toFixed(2)}</td>
+                <td className="p-4 font-semibold text-right">{formatCurrency(t.total)}</td>
                 <td className="p-4">
                   <span className={`px-2 py-1 text-xs rounded-full font-medium ${t.status === 'Refunded' ? 'bg-orange-100 text-orange-700' : 'bg-green-100 text-green-700'}`}>
                     {t.status || 'Completed'}
@@ -113,7 +126,8 @@ function TransactionHistoryPage() {
           </div>
         )}
       </div>
-    </div>
+      </div>
+    </>
   );
 }
 

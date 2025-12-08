@@ -90,9 +90,11 @@ const Index = () => {
   useEffect(() => {
     const redirectIfLoggedIn = async () => {
       try {
-        const { user } = await (window as any).api.auth.getCurrentUser();
-        if (user) {
-          navigate("/dashboard");
+        if (typeof window !== 'undefined' && (window as any).api?.auth) {
+          const { user } = await (window as any).api.auth.getCurrentUser();
+          if (user) {
+            navigate("/dashboard");
+          }
         }
       } catch (error) {
         console.error("Error checking current user on landing:", error);
@@ -148,12 +150,13 @@ const Index = () => {
 
   const handleGetStarted = async () => {
     try {
-      const { hasOwner } = await (window as any).api.auth.hasOwner();
-      if (!hasOwner) {
-        navigate("/owner-setup");
-        return;
+      if (typeof window !== 'undefined' && (window as any).api?.auth) {
+        const { hasOwner } = await (window as any).api.auth.hasOwner();
+        if (!hasOwner) {
+          navigate("/owner-setup");
+          return;
+        }
       }
-
       navigate("/signin");
     } catch (error) {
       console.error("Error handling get started:", error);

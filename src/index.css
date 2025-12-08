@@ -213,6 +213,9 @@ All colors MUST be HSL.
   .stat-card-light-warning {
     @apply bg-red-50 border border-red-200 rounded-xl p-5;
   }
+  .stat-card-info {
+    @apply bg-blue-50 border border-blue-200 rounded-xl p-5;
+  }
   .glass-input, .glass-button {
     @apply border border-border rounded-lg px-4 py-2 bg-card focus:ring-2 focus:ring-ring outline-none shadow-sm transition-all;
   }
@@ -238,10 +241,22 @@ All colors MUST be HSL.
     @apply px-2 py-1 text-xs rounded-full font-medium bg-green-100 text-green-700;
   }
   .row-expired {
-    @apply bg-red-50/50;
+    @apply bg-red-50;
+  }
+  .row-expired:hover {
+    @apply bg-red-100;
   }
   .row-low-stock {
-    @apply bg-orange-50/50;
+    @apply bg-orange-50;
+  }
+  .row-low-stock:hover {
+    @apply bg-orange-100;
+  }
+  .row-in-stock {
+    @apply bg-green-50;
+  }
+  .row-in-stock:hover {
+    @apply bg-green-100;
   }
   .glass-modal {
     @apply bg-card rounded-2xl shadow-lg;

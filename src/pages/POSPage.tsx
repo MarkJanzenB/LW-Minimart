@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Search, Scan, ShoppingCart, Wallet } from 'lucide-react';
 import { SidebarTrigger } from '@/components/ui/sidebar';
-import { Product, CartItem, Transaction, ViewState } from '@/integrations/supabase/types';
+import { formatCurrency } from '@/hooks/use-currency';
+
+import { Product, CartItem, Transaction, ViewState } from '@/integrations/supabase/types'; 
 import { MOCK_PRODUCTS, TAX_RATE } from '@/constants';
 import ProductCard from '@/components/ProductCard';
 import CartItemComponent from '@/components/CartItem';
@@ -246,6 +248,7 @@ function PosPage() {
         <div className="px-8 py-6 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <SidebarTrigger />
+            <ShoppingCart className="w-5 h-5 text-foreground" />
             <div>
               <h1 className="text-3xl font-bold text-foreground">Point of Sale</h1>
               <p className="text-muted-foreground mt-1">Create and manage transactions</p>
@@ -349,15 +352,15 @@ function PosPage() {
              <div className="space-y-2 text-sm mb-6">
                <div className="flex justify-between text-stone-500">
                  <span>Subtotal</span>
-                 <span>₱{subtotal.toFixed(2)}</span>
+                 <span>{formatCurrency(subtotal)}</span>
                </div>
                <div className="flex justify-between text-stone-500">
                  <span>VAT (12% included)</span>
-                 <span>₱{((total / 1.12) * 0.12).toFixed(2)}</span>
+                 <span>{formatCurrency((total / 1.12) * 0.12)}</span>
                </div>
                <div className="flex justify-between items-end mt-4 pt-4 border-t border-stone-100">
                  <span className="font-bold text-xl text-foreground">Total</span>
-                 <span className="font-black text-3xl text-foreground">₱{total.toFixed(2)}</span>
+                 <span className="font-black text-3xl text-foreground">{formatCurrency(total)}</span>
                </div>
              </div>
 
