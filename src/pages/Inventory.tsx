@@ -27,6 +27,7 @@ import { dbService, Product } from "@/services/database";
 import { toast } from "sonner";
 import { AddProductDialog } from "@/components/AddProductDialog";
 import { EditProductDialog } from "@/components/EditProductDialog";
+import { useScannerStore } from "@/stores/scannerStore";
 
 // TypeScript Interface
 interface InventoryItem {
@@ -393,6 +394,12 @@ const Inventory = () => {
   const [viewMode, setViewMode] = useState<"list" | "card">("list");
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 20;
+  const lastScannedBarcode = useScannerStore((s) => s.lastScannedBarcode);
+  useEffect(() => {
+    if (lastScannedBarcode) {
+      setSearchTerm(lastScannedBarcode);
+    }
+  }, [lastScannedBarcode]);
 
   const baseData: InventoryItem[] = inventory.length > 0 ? inventory : sampleInventoryData;
 
@@ -837,16 +844,17 @@ const Inventory = () => {
         {/* Filter Bar */}
         <div className="glass-card p-4 mb-6 animate-fade-in-up opacity-0" style={{ animationDelay: "400ms" }}>
           <div className="flex flex-col gap-4">
-            <div className="flex flex-col lg:flex-row gap-4 items-stretch lg:items-center">
+            <div className="flex flex-col lg:flex-row gap-4 items-stretch lg:items-center pb-2">
               {/* Search */}
               <div className="relative flex-1">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                <Search className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                 <input
                   type="text"
                   placeholder="Search by name, batch no, or barcode..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="glass-input w-full pl-12 pr-4"
+                  className="glass-input w-full pr-4"
+                  style={{ paddingLeft: '3.25rem' }}
                 />
               </div>
 
@@ -941,7 +949,7 @@ const Inventory = () => {
                 <span>Add Product</span>
               </button>
             </div>
-            <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-2 flex-wrap mt-2">
               {categories.map((cat) => (
                 <button
                   key={cat}

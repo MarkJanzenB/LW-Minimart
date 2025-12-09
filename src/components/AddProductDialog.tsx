@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -6,6 +6,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { dbService, Product } from '@/services/database';
 import { toast } from 'sonner';
+import { Scan } from 'lucide-react';
+import BarcodeScannerModal from '@/components/BarcodeScannerModal';
+import { useScannerStore } from '@/stores/scannerStore';
 
 interface AddProductDialogProps {
   isOpen: boolean;
@@ -24,6 +27,25 @@ export function AddProductDialog({ isOpen, onClose, onProductAdded }: AddProduct
     expiryDate: '',
     barcode: '',
   });
+
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
+  const nameInputRef = useRef<HTMLInputElement>(null);
+  const barcodeInputRef = useRef<HTMLInputElement>(null);
+  const lastScannedBarcode = useScannerStore((s) => s.lastScannedBarcode);
+  const setLastScannedBarcode = useScannerStore((s) => s.setLastScannedBarcode);
+
+  useEffect(() => {
+    if (isOpen && lastScannedBarcode) {
+      setFormData((prev) => ({ ...prev, barcode: prev.barcode || lastScannedBarcode }));
+    }
+  }, [isOpen, lastScannedBarcode]);
+
+  useEffect(() => {
+    if (isOpen) {
+      const id = window.requestAnimationFrame(() => nameInputRef.current?.focus());
+      return () => window.cancelAnimationFrame(id);
+    }
+  }, [isOpen]);
   const [formData, setFormData] = useState({
     name: '',
     sku: '',
@@ -274,6 +296,7 @@ export function AddProductDialog({ isOpen, onClose, onProductAdded }: AddProduct
               <Input
                 id="name"
                 name="name"
+                ref={nameInputRef}
                 value={formData.name}
                 onChange={handleChange}
                 required
@@ -417,21 +440,24 @@ export function AddProductDialog({ isOpen, onClose, onProductAdded }: AddProduct
             
             <div className="space-y-2">
               <Label htmlFor="barcode">Barcode</Label>
-              <div className="flex gap-2">
+              <div className="flex gap-2 items-center">
                 <Input
                   id="barcode"
                   name="barcode"
+                  ref={barcodeInputRef}
                   value={formData.barcode}
                   onChange={handleChange}
                   placeholder="e.g., 123456789012"
                 />
-                <Button
+                <button
                   type="button"
-                  variant="outline"
-                  onClick={() => {}}
+                  aria-label="Scan barcode"
+                  className="glass-button p-2 w-10 h-10 flex items-center justify-center"
+                  onClick={() => setIsScannerOpen(true)}
+                  title="Scan barcode"
                 >
-                  Scan Barcode
-                </Button>
+                  <Scan className="w-5 h-5" />
+                </button>
               </div>
             </div>
             
@@ -463,6 +489,22 @@ export function AddProductDialog({ isOpen, onClose, onProductAdded }: AddProduct
         </form>
       </DialogContent>
     </Dialog>
+    <BarcodeScannerModal
+      isOpen={isScannerOpen}
+      onClose={() => setIsScannerOpen(false)}
+      onAdd={(code) => {
+        // In Add Product flow, both Add and Search just fill the barcode input
+        setFormData((prev) => ({ ...prev, barcode: code }));
+        setIsScannerOpen(false);
+        setTimeout(() => barcodeInputRef.current?.focus(), 0);
+      }}
+      onSearch={(code) => {
+        // For Search Product: publish to global scanner store and close dialog so Inventory filters
+        setLastScannedBarcode(code);
+        setIsScannerOpen(false);
+        onClose();
+      }}
+    />
     <Dialog open={isRestockDialogOpen && !!existingProduct} onOpenChange={(open) => { if (!open) setIsRestockDialogOpen(false); }}>
       <DialogContent className="max-w-md">
         <DialogHeader>
