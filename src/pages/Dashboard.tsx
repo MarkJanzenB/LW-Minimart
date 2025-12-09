@@ -51,13 +51,12 @@ const Dashboard = () => {
     { month: "Jun", sales: 0 },
   ];
 
-  // For now, use sample inventory data (can be enhanced later with category breakdown from database)
-  const inventoryData = [
-    { category: "Electronics", value: 45 },
-    { category: "Food", value: 30 },
-    { category: "Clothing", value: 15 },
-    { category: "Other", value: 10 },
-  ];
+  // Inventory category breakdown - can be enhanced later with database query
+  // For now, show empty state if no data
+  const inventoryData = metrics?.inventory?.totalProducts > 0 ? [
+    // This would be populated from a database query for category breakdown
+    // Placeholder structure - will be replaced with real data when query is added
+  ] : [];
 
   const COLORS = ["#133020", "#FFB347", "#FFC370", "#133020"];
 

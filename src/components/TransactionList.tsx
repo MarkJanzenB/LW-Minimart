@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -20,18 +20,37 @@ import {
 import { Search, Filter, Edit, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-const transactions = [
-  { id: "1", date: "2024-01-15", type: "income", amount: 1250, category: "Sales", description: "Order #2241 - Bulk Purchase" },
-  { id: "2", date: "2024-01-15", type: "expense", amount: 450, category: "Inventory", description: "Vendor Payment (Bakery)" },
-  { id: "3", date: "2024-01-14", type: "expense", amount: 200, category: "Marketing", description: "Facebook Ads Monthly" },
-  { id: "4", date: "2024-01-13", type: "income", amount: 85, category: "Sales", description: "Order #2240" },
-  { id: "5", date: "2024-01-12", type: "expense", amount: 120, category: "Operations", description: "Office Utilities" },
-  { id: "6", date: "2024-01-11", type: "income", amount: 320, category: "Sales", description: "Order #2239" },
-  { id: "7", date: "2024-01-10", type: "expense", amount: 1500, category: "Inventory", description: "Stock Purchase" },
-  { id: "8", date: "2024-01-09", type: "income", amount: 650, category: "Services", description: "Consultation Fee" },
-];
-
 export function TransactionList() {
+  const [transactions, setTransactions] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Fetch transactions from database
+  useEffect(() => {
+    const fetchTransactions = async () => {
+      try {
+        setLoading(true);
+        const response = await (window as any).api.transactions.getAll();
+        if (response.success && response.data) {
+          // Map database transactions to component format
+          const mappedTransactions = response.data.map((t: any) => ({
+            id: t.transaction_id || t.id.toString(),
+            date: t.date || t.created_at,
+            type: "income", // Transactions are sales (income)
+            amount: parseFloat(t.total_amount) || 0,
+            category: "Sales",
+            description: `Transaction ${t.transaction_id || t.id}`,
+          }));
+          setTransactions(mappedTransactions);
+        }
+      } catch (error) {
+        console.error('Failed to fetch transactions:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchTransactions();
+  }, []);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterType, setFilterType] = useState<string>("all");
   const [filterCategory, setFilterCategory] = useState<string>("all");

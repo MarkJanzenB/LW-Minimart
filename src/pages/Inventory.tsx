@@ -90,128 +90,7 @@ const getRowClassName = (item: { expiryDate: string; stock: number; minStock: nu
   return "";
 };
 
-// Initialize with empty array - will be populated from database
-const sampleInventoryData: InventoryItem[] = [
-  {
-    id: "INV004",
-    name: "Sample Item",
-    sku: "SKU-INV004",
-    price: 18.75,
-    stock: 234,
-    minStock: 30,
-    category: "Health",
-    expiryDate: "2026-03-10",
-    status: "In Stock",
-    batchNo: "BT-2024-004",
-    barcode: "8901234567893"
-  },
-  {
-    id: "INV005",
-    name: "Coconut Oil",
-    sku: "SKU-INV005",
-    price: 9.99,
-    stock: 5,
-    minStock: 15,
-    category: "Food",
-    expiryDate: "2025-12-01",
-    status: "Low Stock",
-    batchNo: "BT-2024-005",
-    barcode: "8901234567894",
-  },
-  {
-    id: "INV006",
-    name: "Protein Powder",
-    sku: "SKU-INV006",
-    price: 45.00,
-    stock: 67,
-    minStock: 20,
-    category: "Health",
-    expiryDate: "2025-09-25",
-    status: "In Stock",
-    batchNo: "BT-2024-006",
-    barcode: "8901234567895",
-  },
-  {
-    id: "INV007",
-    name: "Herbal Shampoo",
-    sku: "SKU-INV007",
-    price: 14.25,
-    stock: 3,
-    minStock: 10,
-    category: "Personal Care",
-    expiryDate: "2024-10-15",
-    status: "Expired",
-    batchNo: "BT-2024-007",
-    barcode: "8901234567896",
-  },
-  {
-    id: "INV008",
-    name: "Quinoa Seeds",
-    sku: "SKU-INV008",
-    price: 8.50,
-    stock: 189,
-    minStock: 25,
-    category: "Food",
-    expiryDate: "2026-01-20",
-    status: "In Stock",
-    batchNo: "BT-2024-008",
-    barcode: "8901234567897",
-  },
-  {
-    id: "INV009",
-    name: "Essential Oil Set",
-    sku: "SKU-INV009",
-    price: 29.99,
-    stock: 10,
-    minStock: 12,
-    category: "Personal Care",
-    expiryDate: "2025-07-30",
-    status: "Low Stock",
-    batchNo: "BT-2024-009",
-    barcode: "8901234567898",
-  },
-  {
-    id: "INV010",
-    name: "Matcha Powder",
-    sku: "SKU-INV010",
-    price: 22.00,
-    stock: 56,
-    minStock: 15,
-    category: "Beverages",
-    expiryDate: "2025-11-15",
-    status: "In Stock",
-    batchNo: "BT-2024-010",
-    barcode: "8901234567899",
-  },
-  {
-    id: "INV011",
-    name: "Honey Raw Organic",
-    sku: "SKU-INV011",
-    price: 16.50,
-    stock: 2,
-    minStock: 10,
-    category: "Food",
-    expiryDate: "2024-09-01",
-    status: "Expired",
-    batchNo: "BT-2024-011",
-    barcode: "8901234567900",
-  },
-  {
-    id: "INV012",
-    name: "Omega-3 Fish Oil",
-    sku: "SKU-INV012",
-    price: 28.99,
-    stock: 98,
-    minStock: 20,
-    category: "Health",
-    expiryDate: "2025-10-10",
-    status: "In Stock",
-    batchNo: "BT-2024-012",
-    barcode: "8901234567901",
-  },
-];
-
-// Get unique categories from inventory when available, otherwise from sample data
+// All inventory data comes from database - no sample data
 const getCategories = (data: ProductWithBatches[]) => ["All", ...new Set(data.map((item) => item.category))];
 
 type SortKey = keyof ProductWithBatches;
@@ -396,7 +275,7 @@ const Inventory = () => {
   const [loading, setLoading] = useState(true);
   const itemsPerPage = 20;
 
-  const baseData: InventoryItem[] = inventory.length > 0 ? inventory : sampleInventoryData;
+  const baseData: InventoryItem[] = inventoryData;
 
   const groupedData: ProductWithBatches[] = useMemo(() => {
     const groups = new Map<string, InventoryItem[]>();

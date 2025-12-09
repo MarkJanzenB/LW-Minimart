@@ -1,15 +1,7 @@
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { TrendingUp } from "lucide-react";
-
-const monthlyCashFlow = [
-  { month: "Jan", operating: 15200, investing: -1500, financing: 2000, net: 15700 },
-  { month: "Feb", operating: 16800, investing: -2000, financing: 1500, net: 16300 },
-  { month: "Mar", operating: 14500, investing: -1800, financing: 3000, net: 15700 },
-  { month: "Apr", operating: 17200, investing: -2200, financing: 2500, net: 17500 },
-  { month: "May", operating: 18900, investing: -2000, financing: 1800, net: 18700 },
-  { month: "Jun", operating: 16260, investing: -2000, financing: 3500, net: 17760 },
-];
 
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (active && payload && payload.length) {
@@ -28,6 +20,40 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 };
 
 export function CashFlowTrendChart() {
+  const [monthlyCashFlow, setMonthlyCashFlow] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchTrendData = async () => {
+      try {
+        setLoading(true);
+        const response = await (window as any).api.dashboard.getMetrics();
+        if (response.success && response.data?.recentTransactions) {
+          // Group transactions by month
+          const monthlyData = response.data.recentTransactions.reduce((acc: any, t: any) => {
+            const month = new Date(t.date).toLocaleDateString('en-US', { month: 'short' });
+            if (!acc[month]) {
+              acc[month] = { month, operating: 0, investing: 0, financing: 0, net: 0 };
+            }
+            acc[month].operating += t.revenue || 0;
+            acc[month].net += t.revenue || 0;
+            return acc;
+          }, {});
+          setMonthlyCashFlow(Object.values(monthlyData));
+        } else {
+          setMonthlyCashFlow([]);
+        }
+      } catch (error) {
+        console.error('Failed to fetch trend data:', error);
+        setMonthlyCashFlow([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchTrendData();
+  }, []);
+
   return (
     <Card className="border-2">
       <CardHeader>
@@ -37,8 +63,17 @@ export function CashFlowTrendChart() {
         </div>
       </CardHeader>
       <CardContent>
-        <ResponsiveContainer width="100%" height={350}>
-          <AreaChart data={monthlyCashFlow} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+        {loading ? (
+          <div className="flex items-center justify-center h-[350px]">
+            <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+          </div>
+        ) : monthlyCashFlow.length === 0 ? (
+          <div className="flex items-center justify-center h-[350px] text-muted-foreground">
+            <p>No trend data available</p>
+          </div>
+        ) : (
+          <ResponsiveContainer width="100%" height={350}>
+            <AreaChart data={monthlyCashFlow} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
             <defs>
               <linearGradient id="colorOperating" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="5%" stopColor="#22c55e" stopOpacity={0.4}/>
@@ -97,6 +132,7 @@ export function CashFlowTrendChart() {
             />
           </AreaChart>
         </ResponsiveContainer>
+        )}
       </CardContent>
     </Card>
   );
