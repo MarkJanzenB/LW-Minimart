@@ -1,6 +1,5 @@
 import { create } from 'zustand';
 import { Transaction } from '@/integrations/supabase/types';
-import { MOCK_TRANSACTIONS } from '@/constants';
 
 interface TransactionStoreState {
   transactions: Transaction[];
@@ -9,7 +8,7 @@ interface TransactionStoreState {
 }
 
 export const useTransactionStore = create<TransactionStoreState>((set) => ({
-  transactions: MOCK_TRANSACTIONS,
+  transactions: [],
   setTransactions: (txs) => set({ transactions: txs }),
   addTransaction: (tx) =>
     set((state) => ({ transactions: [tx, ...state.transactions] })),

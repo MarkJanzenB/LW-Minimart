@@ -16,8 +16,9 @@ contextBridge.exposeInMainWorld("api", {
   inventory: {
     syncFromClient: (products: Product[]) =>
       ipcRenderer.invoke("inventory:syncFromClient", products),
-    getMirror: () => ipcRenderer.invoke('inventory:getMirror'),
-    delete: (id: string) => ipcRenderer.invoke('inventory:delete', id),
+    getMirror: () => ipcRenderer.invoke("inventory:getMirror"),
+    delete: (id: string) => ipcRenderer.invoke("inventory:delete", id),
+  },
   db: {
     recordSale: (transaction: unknown) =>
       ipcRenderer.invoke("db:recordSale", transaction),
@@ -61,6 +62,7 @@ declare global {
         syncFromClient(products: Product[]): Promise<void>;
         getMirror(): Promise<Product[]>;
         delete(id: string): Promise<void>;
+      };
       db: {
         recordSale(
           transaction: unknown
