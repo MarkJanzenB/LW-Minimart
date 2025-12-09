@@ -1,7 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Calendar, Search, SlidersHorizontal, Receipt } from 'lucide-react';
 import { SidebarTrigger } from '@/components/ui/sidebar';
-import { MOCK_TRANSACTIONS } from '@/constants';
 import { Transaction } from '@/integrations/supabase/types';
 import { formatCurrency } from '@/hooks/use-currency';
 
@@ -168,10 +167,9 @@ function TransactionHistoryPage() {
                   )}
                 </td>
               </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+            ))}
+          </tbody>
+        </table>
         {!loading && filteredTransactions.length === 0 && (
           <div className="text-center py-20 text-muted-foreground">
             <p>No transactions found.</p>

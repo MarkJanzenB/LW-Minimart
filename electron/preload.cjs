@@ -18,4 +18,17 @@ contextBridge.exposeInMainWorld("api", {
     getMirror: () => ipcRenderer.invoke("inventory:getMirror"),
     delete: (id) => ipcRenderer.invoke("inventory:delete", id),
   },
+  products: {
+    getAll: () => ipcRenderer.invoke("products:getAll"),
+    getByBarcode: (barcode) => ipcRenderer.invoke("products:getByBarcode", barcode),
+    getInventory: () => ipcRenderer.invoke("products:getInventory"),
+  },
+  transactions: {
+    getAll: (limit, offset) => ipcRenderer.invoke("transactions:getAll", limit, offset),
+    getById: (transactionId) => ipcRenderer.invoke("transactions:getById", transactionId),
+    create: (transactionData) => ipcRenderer.invoke("transactions:create", transactionData),
+  },
+  dashboard: {
+    getMetrics: () => ipcRenderer.invoke("dashboard:getMetrics"),
+  },
 });
