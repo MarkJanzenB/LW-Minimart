@@ -3,13 +3,13 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsi
 import { TrendingUp } from "lucide-react";
 
 const cashflowData = [
-  { date: "Nov 25", income: 100, expenses: 150, profit: -50 },
-  { date: "Nov 26", income: 189.75, expenses: 500, profit: -310.25 },
-  { date: "Nov 27", income: 250, expenses: 200, profit: 50 },
-  { date: "Nov 28", income: 180, expenses: 150, profit: 30 },
-  { date: "Nov 29", income: 160, expenses: 100, profit: 60 },
-  { date: "Nov 30", income: 200, expenses: 120, profit: 80 },
-  { date: "Dec 1", income: 220, expenses: 140, profit: 80 },
+  { date: "Nov 25", income: 450, expenses: 150, revenue: 300 },
+  { date: "Nov 26", income: 520, expenses: 180, revenue: 340 },
+  { date: "Nov 27", income: 480, expenses: 200, revenue: 280 },
+  { date: "Nov 28", income: 560, expenses: 220, revenue: 340 },
+  { date: "Nov 29", income: 490, expenses: 190, revenue: 300 },
+  { date: "Nov 30", income: 530, expenses: 210, revenue: 320 },
+  { date: "Dec 1", income: 570, expenses: 230, revenue: 340 },
 ];
 
 const CustomTooltip = ({ active, payload, label }: any) => {
@@ -52,35 +52,51 @@ export function CashflowChart() {
           />
           <Tooltip content={<CustomTooltip />} />
           <Legend 
-            wrapperStyle={{ paddingTop: '20px' }}
+            wrapperStyle={{ 
+              paddingTop: '20px',
+              display: 'flex',
+              justifyContent: 'center',
+              gap: '20px',
+              marginTop: '10px'
+            }}
             iconType="circle"
+            formatter={(value, entry: any, index) => {
+              let color = '';
+              switch (value) {
+                case 'Income': color = '#22c55e'; break;
+                case 'Expenses': color = '#ef4444'; break;
+                case 'Profit': color = '#3b82f6'; break;
+                default: color = '#000';
+              }
+              return <span style={{ color }}>{value}</span>;
+            }}
           />
           <Line 
             type="monotone" 
             dataKey="income" 
-            name="Income"
-            stroke="hsl(var(--chart-income))" 
+            name="Gross Income"
+            stroke="#3b82f6" // Blue
             strokeWidth={2.5}
-            dot={{ fill: 'hsl(var(--chart-income))', r: 4 }}
-            activeDot={{ r: 6 }}
+            dot={{ fill: '#3b82f6', r: 4 }}
+            activeDot={{ r: 6, stroke: '#3b82f6', strokeWidth: 2 }}
           />
           <Line 
             type="monotone" 
             dataKey="expenses" 
             name="Expenses"
-            stroke="hsl(var(--chart-expenses))" 
+            stroke="#ef4444" // Red
             strokeWidth={2.5}
-            dot={{ fill: 'hsl(var(--chart-expenses))', r: 4 }}
-            activeDot={{ r: 6 }}
+            dot={{ fill: '#ef4444', r: 4 }}
+            activeDot={{ r: 6, stroke: '#ef4444', strokeWidth: 2 }}
           />
           <Line 
             type="monotone" 
-            dataKey="profit" 
-            name="Profit"
-            stroke="hsl(var(--chart-profit))" 
+            dataKey="revenue" 
+            name="Revenue"
+            stroke="#22c55e" // Green
             strokeWidth={2.5}
-            dot={{ fill: 'hsl(var(--chart-profit))', r: 4 }}
-            activeDot={{ r: 6 }}
+            dot={{ fill: '#22c55e', r: 4 }}
+            activeDot={{ r: 6, stroke: '#22c55e', strokeWidth: 2 }}
           />
         </LineChart>
       </ResponsiveContainer>

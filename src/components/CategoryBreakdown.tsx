@@ -10,11 +10,11 @@ const incomeData = [
 ];
 
 const expenseData = [
-  { name: "Inventory", value: 3200, color: "#ef4444" },
-  { name: "Operations", value: 1800, color: "#f59e0b" },
-  { name: "Marketing", value: 1500, color: "#8b5cf6" },
-  { name: "Utilities", value: 1200, color: "#06b6d4" },
-  { name: "Rent", value: 540, color: "#ec4899" },
+  { name: "Inventory", value: 3200, color: "#22c55e" }, // Green
+  { name: "Operations", value: 1800, color: "#facc15" }, // Yellow
+  { name: "Marketing", value: 1500, color: "#16a34a" }, // Darker Green
+  { name: "Utilities", value: 1200, color: "#eab308" }, // Darker Yellow
+  { name: "Rent", value: 540, color: "#4ade80" }, // Lighter Green
 ];
 
 const CustomTooltip = ({ active, payload }: any) => {
