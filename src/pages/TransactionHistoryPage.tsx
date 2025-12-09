@@ -1,13 +1,12 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Calendar, Search, SlidersHorizontal, Receipt } from 'lucide-react';
 import { SidebarTrigger } from '@/components/ui/sidebar';
+import { MOCK_TRANSACTIONS } from '@/constants';
 import { Transaction } from '@/integrations/supabase/types';
-import { useTransactionStore } from '@/stores/transactionStore';
 import { formatCurrency } from '@/hooks/use-currency';
 
 function TransactionHistoryPage() {
-  const transactions = useTransactionStore((state) => state.transactions);
-  const refundInStore = useTransactionStore((state) => state.refundTransaction);
+  const [transactions, setTransactions] = useState<Transaction[]>(MOCK_TRANSACTIONS);
   const [searchTerm, setSearchTerm] = useState('');
   const [sortOrder, setSortOrder] = useState('desc');
 
@@ -26,7 +25,9 @@ function TransactionHistoryPage() {
   }, [transactions, searchTerm, sortOrder]);
 
   const handleRefund = (transactionId: string) => {
-    refundInStore(transactionId);
+    setTransactions(prev => 
+      prev.map(t => t.id === transactionId ? { ...t, status: 'Refunded' } : t)
+    );
   };
 
   return (

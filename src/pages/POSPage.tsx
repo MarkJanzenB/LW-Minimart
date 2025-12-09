@@ -5,8 +5,6 @@ import { formatCurrency } from '@/hooks/use-currency';
 
 import { Product, CartItem, Transaction, ViewState } from '@/integrations/supabase/types'; 
 import { MOCK_PRODUCTS, TAX_RATE } from '@/constants';
-import { useTransactionStore } from '@/stores/transactionStore';
-
 import ProductCard from '@/components/ProductCard';
 import CartItemComponent from '@/components/CartItem';
 import CheckoutModal from '@/components/CheckoutModal';
@@ -15,18 +13,14 @@ import BarcodeScannerModal from '@/components/BarcodeScannerModal';
 
 function PosPage() {
   const [view, setView] = useState<ViewState>('pos');
-
   const [products, setProducts] = useState<Product[]>(MOCK_PRODUCTS.map(p => ({...p, stock_quantity: p.stock, barcode: p.code})));
   const [cart, setCart] = useState<CartItem[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [transaction, setTransaction] = useState<Transaction | null>(null);
-
   const [selectedCartItemIndex, setSelectedCartItemIndex] = useState<number | null>(null);
   const [selectedProductIndex, setSelectedProductIndex] = useState<number | null>(0);
   const [activeList, setActiveList] = useState<'products' | 'cart'>('products');
   const [isScannerOpen, setIsScannerOpen] = useState(false);
-
-  const addTransactionToStore = useTransactionStore((state) => state.addTransaction);
 
   const searchInputRef = useRef<HTMLInputElement>(null);
   const cartItemsRef = useRef<(HTMLDivElement | null)[]>([]);
@@ -114,7 +108,7 @@ function PosPage() {
       paymentMethod: method,
       referenceNumber: method === 'qr' ? referenceNumber : undefined
     };
-    addTransactionToStore(newTransaction);
+    // Simulate successful transaction
     setTransaction(newTransaction);
     setView('receipt');
     setCart([]);
