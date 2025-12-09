@@ -42,11 +42,37 @@ function PosPage() {
       try {
         setLoading(true);
         console.log('POS: Fetching products from SQLite...');
-        
+
+        // Prefer inventory-style data if available so POS mirrors the Inventory page
+        if (typeof window !== 'undefined' && (window as any).api?.products?.getInventory) {
+          console.log('POS: Using products:getInventory for POS items...');
+          const response = await (window as any).api.products.getInventory();
+          console.log('POS: getInventory response:', response);
+
+          if (response && response.success && Array.isArray(response.data) && response.data.length > 0) {
+            const mappedProducts: Product[] = response.data.map((p: any) => ({
+              id: p.id?.toString() ?? '',
+              name: p.name ?? '',
+              code: p.sku || p.barcode || `PROD-${p.id}`,
+              price: Number(p.price) || 0,
+              stock: Number(p.stock ?? 0),
+              barcode: p.barcode ?? '',
+              category: p.category ?? 'Uncategorized',
+              color: undefined,
+            }));
+
+            console.log(`POS: Loaded ${mappedProducts.length} products from SQLite via getInventory`);
+            setProducts(mappedProducts);
+            return;
+          } else {
+            console.log('POS: No products found via getInventory or invalid data', response);
+          }
+        }
+
         // Use products:getAll which fetches from SQLite
         if (typeof window !== 'undefined' && (window as any).api?.products?.getAll) {
           const response = await (window as any).api.products.getAll();
-          console.log('POS: Products response:', response);
+          console.log('POS: Products response (getAll):', response);
           
           if (response && response.success && Array.isArray(response.data)) {
             // Map SQLite database products to Product interface
@@ -63,26 +89,26 @@ function PosPage() {
                 color: undefined,
               }));
             
-            console.log(`POS: Loaded ${mappedProducts.length} products from SQLite`);
+            console.log(`POS: Loaded ${mappedProducts.length} products from SQLite via getAll`);
             setProducts(mappedProducts);
+            return;
           } else {
             console.warn('POS: Invalid response from products:getAll', response);
-            setProducts([]);
           }
         } else {
           console.error('POS: products:getAll API not available');
-          setProducts([]);
         }
 
         // Fallback: use local IndexedDB data (same as Inventory page)
+        console.warn('POS: Falling back to IndexedDB via dbService.getProducts()');
         const { dbService } = await import('@/services/database');
         const localProducts = await dbService.getProducts();
         const mappedLocal: Product[] = localProducts.map((p: any) => ({
           id: p.id.toString(),
           name: p.name,
           code: p.sku || p.barcode || `PROD-${p.id}`,
-          price: parseFloat(p.price) || 0,
-          stock: parseInt(p.stock) || 0,
+          price: Number(p.price) || 0,
+          stock: Number(p.stock) || 0,
           barcode: p.barcode || '',
           category: p.category || 'Uncategorized',
           color: undefined,
@@ -152,6 +178,29 @@ function PosPage() {
     return product ? product.stock : 0;
   };
   
+  const findProductByBarcode = async (barcode: string): Promise<Product | null> => {
+    try {
+      const { dbService } = await import('@/services/database');
+      const products = await dbService.getProducts();
+      const match = products.find((p: any) => (p.barcode ?? '').toString() === barcode);
+      if (match) {
+        return {
+          id: match.id?.toString?.() ?? '',
+          name: match.name,
+          code: match.sku || match.barcode || `PROD-${match.id}`,
+          price: Number(match.price) || 0,
+          stock: Number(match.stock ?? 0) || 0,
+          barcode: match.barcode || '',
+          category: match.category || 'Uncategorized',
+          color: undefined,
+        };
+      }
+    } catch (err) {
+      console.error('Barcode lookup via IndexedDB failed', err);
+    }
+    return null;
+  };
+
   // Cart Actions
   const addToCart = (product: Product) => {
     const cartItem = cart.find(item => item.id === product.id);
@@ -260,33 +309,12 @@ function PosPage() {
         } catch (error) {
           console.error('POS: Barcode search failed:', error);
         }
-      }
-    } catch (err) {
-      console.error('Barcode lookup via Electron failed', err);
-    }
+      };
 
-    try {
-      const { dbService } = await import('@/services/database');
-      const products = await dbService.getProducts();
-      const match = products.find((p: any) => (p.barcode ?? '').toString() === barcode);
-      if (match) {
-        return {
-          id: match.id?.toString?.() ?? '',
-          name: match.name,
-          code: match.sku || match.barcode || `PROD-${match.id}`,
-          price: Number(match.price) || 0,
-          stock: Number(match.stock ?? 0) || 0,
-          barcode: match.barcode || '',
-          category: match.category || 'Uncategorized',
-          color: undefined,
-        };
-      }
-    } catch (err) {
-      console.error('Barcode lookup via IndexedDB failed', err);
+      handleBarcodeSearch();
     }
-    return null;
-  };
-
+  }, [searchQuery]);
+  
   // Passive barcode scanning: auto-add when a scan hits the input
   useEffect(() => {
     if (searchQuery.length >= 3) {
@@ -332,7 +360,7 @@ function PosPage() {
 
       // Save to database
       const response = await (window as any).api.transactions.create(transactionData);
-      
+
       if (response.success) {
         // Play cash register immediately after persistence to avoid UI lag
         playKaChing();
@@ -348,34 +376,67 @@ function PosPage() {
           change: method === 'cash' ? amountReceived - total : undefined,
           paymentMethod: method,
           referenceNumber: method === 'qr' ? referenceNumber : undefined,
-          status: 'Completed'
+          status: 'Completed',
         };
+
         addTransactionToStore(newTransaction);
         setTransaction(newTransaction);
         setView('receipt');
         setCart([]);
         playKaChing();
-        
+
         // Refresh products from SQLite to update stock after transaction
         console.log('POS: Refreshing products after transaction...');
-        const productsResponse = await (window as any).api.products.getAll();
-        if (productsResponse && productsResponse.success && Array.isArray(productsResponse.data)) {
-          const mappedProducts: Product[] = productsResponse.data
-            .filter((p: any) => p.is_active !== 0) // Only active products
-            .map((p: any) => ({
-              id: p.id?.toString() ?? '',
-              name: p.name ?? '',
-              code: p.sku || p.barcode || `PROD-${p.id}`,
-              price: Number(p.price ?? p.selling_price ?? 0),
-              stock: Number(p.stock ?? p.stock_quantity ?? 0),
-              barcode: p.barcode ?? '',
-              category: p.category ?? 'Uncategorized',
-              color: undefined,
-            }));
-          console.log(`POS: Refreshed ${mappedProducts.length} products from SQLite`);
-          setProducts(mappedProducts);
-        } else {
-          console.warn('POS: Failed to refresh products after transaction', productsResponse);
+
+        try {
+          // Prefer inventory-style data just like initial load
+          if (typeof window !== 'undefined' && (window as any).api?.products?.getInventory) {
+            const invResponse = await (window as any).api.products.getInventory();
+            console.log('POS: post-transaction getInventory response:', invResponse);
+
+            if (invResponse && invResponse.success && Array.isArray(invResponse.data) && invResponse.data.length > 0) {
+              const mappedProducts: Product[] = invResponse.data.map((p: any) => ({
+                id: p.id?.toString() ?? '',
+                name: p.name ?? '',
+                code: p.sku || p.barcode || `PROD-${p.id}`,
+                price: Number(p.price) || 0,
+                stock: Number(p.stock ?? 0),
+                barcode: p.barcode ?? '',
+                category: p.category ?? 'Uncategorized',
+                color: undefined,
+              }));
+              console.log(`POS: Refreshed ${mappedProducts.length} products via getInventory`);
+              setProducts(mappedProducts);
+            } else {
+              console.log('POS: No products found via getInventory during refresh, falling back to getAll.', invResponse);
+              throw new Error('Empty or invalid getInventory response');
+            }
+          } else {
+            throw new Error('products:getInventory not available');
+          }
+        } catch (refreshError) {
+          console.warn('POS: getInventory refresh failed, falling back to getAll:', refreshError);
+          if (typeof window !== 'undefined' && (window as any).api?.products?.getAll) {
+            const productsResponse = await (window as any).api.products.getAll();
+            if (productsResponse && productsResponse.success && Array.isArray(productsResponse.data)) {
+              const mappedProducts: Product[] = productsResponse.data
+                .filter((p: any) => p.is_active !== 0)
+                .map((p: any) => ({
+                  id: p.id?.toString() ?? '',
+                  name: p.name ?? '',
+                  code: p.sku || p.barcode || `PROD-${p.id}`,
+                  price: Number(p.price ?? p.selling_price ?? 0),
+                  stock: Number(p.stock ?? p.stock_quantity ?? 0),
+                  barcode: p.barcode ?? '',
+                  category: p.category ?? 'Uncategorized',
+                  color: undefined,
+                }));
+              console.log(`POS: Refreshed ${mappedProducts.length} products via getAll`);
+              setProducts(mappedProducts);
+            } else {
+              console.warn('POS: Failed to refresh products via getAll after transaction', productsResponse);
+            }
+          }
         }
       } else {
         throw new Error(response.message || 'Failed to save transaction');
@@ -753,11 +814,22 @@ function PosPage() {
         isOpen={isScannerOpen}
         onClose={() => setIsScannerOpen(false)}
         onScan={(barcode) => {
-          const product = products.find(p => p.barcode === barcode);
-          if (product) {
-            addToCart(product);
+          const normalized = (barcode ?? '').toString().trim();
+          console.log('POS: Scanner modal scanned barcode:', normalized);
+          const match = products.find(
+            (p) => (p.barcode ?? '').toString().trim() === normalized,
+          );
+          if (match) {
+            addToCart(match);
+            return;
           }
-          setIsScannerOpen(false);
+          void findProductByBarcode(normalized).then((fallback) => {
+            if (fallback) {
+              addToCart(fallback);
+            } else {
+              console.warn('POS: No product found for scanned barcode:', normalized);
+            }
+          });
         }}
       />
 
