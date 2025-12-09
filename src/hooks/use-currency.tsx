@@ -58,26 +58,19 @@ export const useCurrency = create<CurrencyStore>()(
   )
 );
 
-// Convert amount from USD (base) to target currency
-export const convertCurrency = (amountInUSD: number, targetCurrencyCode: string): number => {
-  const rate = exchangeRates[targetCurrencyCode] || 1;
-  return amountInUSD * rate;
-};
-
-// Format currency with conversion from USD base
-export const formatCurrency = (amountInUSD: number, currencyCode?: string) => {
+// Format a numeric amount using the currently selected currency.
+// NOTE: Amounts in the app are already in the chosen currency, so we do not
+// perform any rate conversion here—just apply the symbol and locale formatting.
+export const formatCurrency = (amount: number, currencyCode?: string) => {
   const store = useCurrency.getState();
   const currency = currencyCode 
     ? currencies.find(c => c.code === currencyCode) || store.currency
     : store.currency;
-  
-  // Convert from USD to target currency
-  const convertedAmount = convertCurrency(amountInUSD, currency.code);
-  
+
   // Determine decimal places based on currency
   const decimals = ['JPY', 'IDR', 'VND'].includes(currency.code) ? 0 : 2;
   
-  return `${currency.symbol}${convertedAmount.toLocaleString('en-US', {
+  return `${currency.symbol}${amount.toLocaleString('en-US', {
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,
   })}`;

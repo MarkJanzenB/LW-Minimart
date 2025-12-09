@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { Banknote, Printer, QrCode } from 'lucide-react';
 import { formatCurrency } from '@/hooks/use-currency';
+import { useToast } from '@/components/ui/use-toast';
 
 interface CheckoutModalProps {
   total: number;
@@ -13,6 +14,7 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ total, onConfirm, onCance
   const [cashRecieved, setCashRecieved] = useState<string>('');
   const [referenceNumber, setReferenceNumber] = useState<string>('');
   const inputRef = useRef<HTMLInputElement>(null);
+  const { toast } = useToast();
 
   useEffect(() => {  
     if (inputRef.current) {
@@ -27,6 +29,7 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ total, onConfirm, onCance
       if (e.key === 'F1') setMethod('qr');
       if (e.key === 'F5') setMethod('cash');
       if (e.key === 'Enter') {
+        e.preventDefault();
         handlePayment();
       }
     };
@@ -41,6 +44,11 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ total, onConfirm, onCance
 
   const handlePayment = () => {
     if (!isSufficient) {
+      toast({
+        title: 'Payment incomplete',
+        description: method === 'cash' ? 'Cash received is less than total due.' : 'Enter a reference number for QR.',
+        variant: 'destructive',
+      });
       return;
     }
 
