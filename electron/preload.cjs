@@ -12,10 +12,4 @@ contextBridge.exposeInMainWorld("api", {
     initializeOwner: (username, password) =>
       ipcRenderer.invoke("auth:initializeOwner", { username, password }),
   },
-  inventory: {
-    syncFromClient: (products) =>
-      ipcRenderer.invoke("inventory:syncFromClient", products),
-    getMirror: () => ipcRenderer.invoke("inventory:getMirror"),
-    delete: (id) => ipcRenderer.invoke("inventory:delete", id),
-  },
 });

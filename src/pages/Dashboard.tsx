@@ -1,20 +1,14 @@
-import { useNavigate } from "react-router-dom";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { TrendingUp, TrendingDown, DollarSign, Package, ShoppingCart, Users, LayoutDashboard, ArrowRight } from "lucide-react";
+import { TrendingUp, TrendingDown, DollarSign, Package, ShoppingCart, Users, LayoutDashboard } from "lucide-react";
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from "recharts";
 import { useLocation } from "react-router-dom";
 import { formatCurrency, useCurrency } from "@/hooks/use-currency";
 
 const Dashboard = () => {
-  const navigate = useNavigate();
   const location = useLocation();
   const isCashflow = location.pathname === "/cashflow";
   const { currency } = useCurrency();
-  
-  const handleProductsClick = () => {
-    navigate("/products");
-  };
   
   // Sample data for charts
   const salesData = [
@@ -105,14 +99,8 @@ const Dashboard = () => {
             </Card>
 
             {/* Products Card */}
-            <Card 
-              className="border-2 hover:shadow-lg transition-all duration-300 transform hover:-translate-y-1 cursor-pointer group"
-              onClick={handleProductsClick}
-            >
-              <CardContent className="pt-6 relative">
-                <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <ArrowRight className="w-4 h-4 text-muted-foreground" />
-                </div>
+            <Card className="border-2 hover:shadow-lg transition-shadow">
+              <CardContent className="pt-6">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm text-muted-foreground font-medium">Products in Stock</p>
@@ -150,7 +138,7 @@ const Dashboard = () => {
           </div>
 
           {/* Charts Section */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Sales Trend Chart */}
             <Card className="border-2">
               <CardHeader>
@@ -176,15 +164,15 @@ const Dashboard = () => {
               </CardContent>
             </Card>
 
-            {/* Cash Flow Chart - Income, Expenses & Profit */}
+            {/* Revenue Trend Chart */}
             <Card className="border-2">
               <CardHeader>
-                <CardTitle className="text-lg font-semibold">Cash Flow Trends (7 Days)</CardTitle>
-                <p className="text-sm text-muted-foreground">Daily income and expenses overview</p>
+                <CardTitle className="text-lg font-semibold">Revenue Trend</CardTitle>
+                <p className="text-sm text-muted-foreground">Weekly revenue tracking</p>
               </CardHeader>
               <CardContent>
-                <ResponsiveContainer width="100%" height={360}>
-                  <LineChart data={revenueData} margin={{ top: 10, right: 24, left: 0, bottom: 0 }}>
+                <ResponsiveContainer width="100%" height={300}>
+                  <LineChart data={revenueData}>
                     <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                     <XAxis dataKey="day" stroke="hsl(var(--muted-foreground))" />
                     <YAxis stroke="hsl(var(--muted-foreground))" />

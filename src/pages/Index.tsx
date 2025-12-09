@@ -77,7 +77,6 @@ const FeatureCard = ({ image, icon: Icon, title, description, iconBgColor, iconC
 const Index = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [scrollY, setScrollY] = useState(0);
   const [activeTab, setActiveTab] = useState("Inventory");
@@ -89,30 +88,20 @@ const Index = () => {
   });
 
   useEffect(() => {
-    const redirectOnLoad = async () => {
+    const redirectIfLoggedIn = async () => {
       try {
-        // First check if user is already logged in
-        const { user } = await (window as any).api.auth.getCurrentUser();
-        if (user) {
-          navigate("/dashboard");
-          return;
-        }
-
-        // Check if owner account exists
-        const { hasOwner } = await (window as any).api.auth.hasOwner();
-        if (!hasOwner) {
-          navigate("/owner-setup");
-        } else {
-          navigate("/signin");
+        if (typeof window !== 'undefined' && (window as any).api?.auth) {
+          const { user } = await (window as any).api.auth.getCurrentUser();
+          if (user) {
+            navigate("/dashboard");
+          }
         }
       } catch (error) {
-        console.error("Error during initial redirect:", error);
-        // Fallback to signin if there's an error
-        navigate("/signin");
+        console.error("Error checking current user on landing:", error);
       }
     };
 
-    redirectOnLoad();
+    redirectIfLoggedIn();
   }, [navigate]);
 
   useEffect(() => {
@@ -161,30 +150,19 @@ const Index = () => {
 
   const handleGetStarted = async () => {
     try {
-      const { hasOwner } = await (window as any).api.auth.hasOwner();
-      if (!hasOwner) {
-        navigate("/owner-setup");
-        return;
+      if (typeof window !== 'undefined' && (window as any).api?.auth) {
+        const { hasOwner } = await (window as any).api.auth.hasOwner();
+        if (!hasOwner) {
+          navigate("/owner-setup");
+          return;
+        }
       }
-
       navigate("/signin");
     } catch (error) {
       console.error("Error handling get started:", error);
       navigate("/signin");
     }
   };
-
-  // Show loading screen while checking authentication and redirecting
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="text-center space-y-4">
-          <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto"></div>
-          <p className="text-muted-foreground">Loading...</p>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen overflow-hidden relative">

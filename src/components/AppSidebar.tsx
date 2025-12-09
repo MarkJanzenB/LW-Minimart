@@ -88,9 +88,10 @@ export function AppSidebar() {
             <SidebarMenu className="space-y-3">
               {menuItems.map((item) =>
                 item.subItems ? (
-                  <SidebarMenuItem key={item.path}>
-                    <SidebarGroup>
+                  <SidebarMenuItem key={item.path} asChild>
+                    <SidebarGroup isExpanded={currentPath.startsWith(item.path)}>
                       <SidebarMenuButton
+                        isSubmenu
                         isActive={isActive(item.path)}
                         className="hover:bg-sidebar-accent transition-colors"
                       >
