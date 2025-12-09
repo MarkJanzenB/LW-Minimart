@@ -9,7 +9,7 @@ import {
   Package,
   AlertTriangle,
   CheckCircle,
-  X,
+  X,  
   FileSpreadsheet,
   FileText,
   ArrowUpDown,
@@ -125,31 +125,83 @@ const Inventory = () => {
       try {
         setIsLoading(true);
 
-        // Prefer electron bridge if available
+        // Prefer electron bridge if available - use getInventory for inventory-specific data
+        if (typeof window !== 'undefined' && (window as any).api?.products?.getInventory) {
+          console.log('Loading inventory from SQLite via products:getInventory...');
+          const response = await (window as any).api.products.getInventory();
+          console.log('getInventory response:', response);
+          
+          if (response && response.success) {
+            if (response.data && Array.isArray(response.data) && response.data.length > 0) {
+              const formattedProducts = response.data.map((p: any) => ({
+                id: p.id?.toString() ?? '',
+                name: p.name,
+                sku: p.sku || '',
+                price: Number(p.price) || 0,
+                stock: Number(p.stock ?? 0),
+                minStock: Number(p.minStock ?? 0),
+                category: p.category ?? 'Uncategorized',
+                expiryDate: p.expiryDate || p.expiry_date || '',
+                status: p.status ?? 'In Stock',
+                batchNo: p.batchNo || p.batch_code || '',
+                barcode: p.barcode ?? '',
+                imageUrl: p.imageUrl ?? p.image_url ?? '',
+              }));
+              console.log(`Loaded ${formattedProducts.length} products from SQLite`);
+              console.log('Formatted products:', formattedProducts);
+              setInventory(formattedProducts);
+              setIsLoading(false);
+              return;
+            } else {
+              console.log('No products found in SQLite database (empty array)');
+              setInventory([]);
+              setIsLoading(false);
+              return;
+            }
+          } else {
+            console.error('getInventory failed:', response?.message || 'Unknown error');
+          }
+        }
+        
+        // Fallback to getAll if getInventory not available
         if (typeof window !== 'undefined' && (window as any).api?.products?.getAll) {
+          console.log('Falling back to products:getAll...');
           const response = await (window as any).api.products.getAll();
-          // Only trust electron data if it has rows; otherwise fall back to IndexedDB
-          if (response.success && Array.isArray(response.data) && response.data.length > 0) {
-            const formattedProducts = response.data.map((p: any) => ({
-              id: p.id?.toString() ?? '',
-              name: p.name,
-              sku: p.sku,
-              price: Number(p.price) || 0,
-              stock: Number(p.stock ?? p.stock_quantity ?? 0),
-              minStock: Number(p.minStock ?? p.min_stock ?? 0),
-              category: p.category ?? 'Uncategorized',
-              expiryDate: p.expiryDate ?? p.expiry_date ?? '',
-              status: p.status ?? 'In Stock',
-              batchNo: p.batchNo ?? p.batch_no ?? '',
-              barcode: p.barcode ?? '',
-              imageUrl: p.imageUrl ?? '',
-            }));
-            setInventory(formattedProducts);
-            return;
+          console.log('getAll response:', response);
+          
+          if (response && response.success) {
+            if (response.data && Array.isArray(response.data) && response.data.length > 0) {
+              const formattedProducts = response.data.map((p: any) => ({
+                id: p.id?.toString() ?? '',
+                name: p.name,
+                sku: p.sku || '',
+                price: Number(p.price) || 0,
+                stock: Number(p.stock ?? p.stock_quantity ?? 0),
+                minStock: Number(p.reorder_threshold ?? 0),
+                category: p.category ?? 'Uncategorized',
+                expiryDate: '',
+                status: 'In Stock',
+                batchNo: '',
+                barcode: p.barcode ?? '',
+                imageUrl: '',
+              }));
+              console.log(`Loaded ${formattedProducts.length} products from SQLite (via getAll)`);
+              console.log('Formatted products (getAll):', formattedProducts);
+              setInventory(formattedProducts);
+              setIsLoading(false);
+              return;
+            } else {
+              console.log('No products found in SQLite database (via getAll)');
+              setInventory([]);
+              return;
+            }
+          } else {
+            console.error('getAll failed:', response?.message || 'Unknown error');
           }
         }
 
-        // Fallback to local IndexedDB service
+        // Final fallback to IndexedDB (for web mode only - should not happen in Electron)
+        console.warn('Falling back to IndexedDB - SQLite API not available. This should only happen in web mode.');
         const products = await dbService.getProducts();
         const activeProducts = products.filter((product) => !(product.status === 'Spoiled' && product.stock === 0));
         const formattedProducts = activeProducts.map((product) => ({
@@ -224,6 +276,65 @@ const Inventory = () => {
 
   const handleProductAdded = async () => {
     try {
+      console.log('Refreshing inventory after product addition...');
+      // Refresh from SQLite (single source of truth)
+      if (typeof window !== 'undefined' && (window as any).api?.products?.getInventory) {
+        const response = await (window as any).api.products.getInventory();
+        console.log('Refresh response:', response);
+        
+        if (response && response.success && Array.isArray(response.data)) {
+          const formattedProducts = response.data.map((p: any) => ({
+            id: p.id?.toString() ?? '',
+            name: p.name,
+            sku: p.sku || '',
+            price: Number(p.price) || 0,
+            stock: Number(p.stock ?? 0),
+            minStock: Number(p.minStock ?? 0),
+            category: p.category ?? 'Uncategorized',
+            expiryDate: p.expiryDate || p.expiry_date || '',
+            status: p.status ?? 'In Stock',
+            batchNo: p.batchNo || p.batch_code || '',
+            barcode: p.barcode ?? '',
+            imageUrl: p.imageUrl ?? '',
+          }));
+          console.log(`Refreshed inventory: ${formattedProducts.length} products`);
+          setInventory(formattedProducts);
+          return;
+        } else {
+          console.warn('Invalid response from getInventory:', response);
+        }
+      }
+      
+      // Fallback to getAll if getInventory not available
+      if (typeof window !== 'undefined' && (window as any).api?.products?.getAll) {
+        console.log('Falling back to getAll for refresh...');
+        const response = await (window as any).api.products.getAll();
+        console.log('getAll refresh response:', response);
+        
+        if (response && response.success && Array.isArray(response.data)) {
+          const formattedProducts = response.data.map((p: any) => ({
+            id: p.id?.toString() ?? '',
+            name: p.name,
+            sku: p.sku || '',
+            price: Number(p.price) || 0,
+            stock: Number(p.stock ?? p.stock_quantity ?? 0),
+            minStock: Number(p.reorder_threshold ?? 0),
+            category: p.category ?? 'Uncategorized',
+            expiryDate: '',
+            status: 'In Stock',
+            batchNo: '',
+            barcode: p.barcode ?? '',
+            imageUrl: '',
+          }));
+          console.log(`Refreshed inventory via getAll: ${formattedProducts.length} products`);
+          setInventory(formattedProducts);
+          return;
+        } else {
+          console.warn('Invalid response from getAll:', response);
+        }
+      }
+
+      // Final fallback to IndexedDB (for web mode only)
       const products = await dbService.getProducts();
       const activeProducts = products.filter((product) => !(product.status === 'Spoiled' && product.stock === 0));
       const formattedProducts = activeProducts.map((product) => ({
@@ -254,23 +365,53 @@ const Inventory = () => {
   const openAdminViewer = async () => {
     try {
       const api = window.api;
-      if (!api || !api.inventory) {
+      if (!api) {
         toast.error("Admin data viewer is only available in the desktop app.");
         return;
       }
 
-      const products = await dbService.getProducts();
-      const nowIso = new Date().toISOString();
-      const normalized = products.map((product) => ({
-        ...product,
-        createdAt: product.createdAt ?? nowIso,
-        updatedAt: product.updatedAt ?? nowIso,
-      }));
+      // Load from SQLite (single source of truth) instead of IndexedDB
+      if (api.products?.getInventory) {
+        const response = await api.products.getInventory();
+        if (response.success && response.data) {
+          // Map SQLite data to Admin Viewer format
+          const mappedData = response.data.map((p: any) => ({
+            id: p.id?.toString() ?? '',
+            name: p.name ?? '',
+            sku: p.sku || '',
+            price: Number(p.price) || 0,
+            stock: Number(p.stock ?? 0),
+            minStock: Number(p.minStock ?? 0),
+            category: p.category ?? 'Uncategorized',
+            expiryDate: p.expiryDate || p.expiry_date || '',
+            status: p.status ?? 'In Stock',
+            batchNo: p.batchNo || p.batch_code || '',
+            barcode: p.barcode ?? '',
+            imageUrl: p.imageUrl ?? '',
+          }));
+          setAdminMirror(mappedData);
+          setIsAdminViewerOpen(true);
+          return;
+        }
+      }
 
-      await api.inventory.syncFromClient(normalized);
-      const mirror = await api.inventory.getMirror();
-      setAdminMirror(mirror as InventoryItem[]);
-      setIsAdminViewerOpen(true);
+      // Fallback to IndexedDB mirror (legacy)
+      if (api.inventory) {
+        const products = await dbService.getProducts();
+        const nowIso = new Date().toISOString();
+        const normalized = products.map((product) => ({
+          ...product,
+          createdAt: product.createdAt ?? nowIso,
+          updatedAt: product.updatedAt ?? nowIso,
+        }));
+
+        await api.inventory.syncFromClient(normalized);
+        const mirror = await api.inventory.getMirror();
+        setAdminMirror(mirror as InventoryItem[]);
+        setIsAdminViewerOpen(true);
+      } else {
+        toast.error("Admin data viewer is only available in the desktop app.");
+      }
     } catch (error) {
       console.error("Error loading admin viewer:", error);
       toast.error("Failed to load admin data viewer");
@@ -279,10 +420,30 @@ const Inventory = () => {
 
   const handleAdminDelete = async (id: string) => {
     try {
-      await dbService.deleteProduct(id);
-      await window.api.inventory.delete(id);
-      setAdminMirror(prev => prev.filter(item => item.id !== id));
-      await handleProductAdded();
+      const api = window.api;
+      
+      // Delete from SQLite if it's a numeric ID (SQLite product)
+      const productId = parseInt(id);
+      if (!isNaN(productId) && api?.products?.delete) {
+        const response = await api.products.delete(productId);
+        if (response.success) {
+          setAdminMirror(prev => prev.filter(item => item.id !== id));
+          await handleProductAdded();
+          toast.success("Product deleted successfully");
+          return;
+        }
+      }
+      
+      // Fallback to IndexedDB deletion (legacy)
+      if (api?.inventory) {
+        await dbService.deleteProduct(id);
+        await api.inventory.delete(id);
+        setAdminMirror(prev => prev.filter(item => item.id !== id));
+        await handleProductAdded();
+        toast.success("Product deleted successfully");
+      } else {
+        toast.error("Failed to delete product");
+      }
     } catch (error) {
       console.error("Error deleting product from admin viewer:", error);
       toast.error("Failed to delete product");
@@ -306,7 +467,7 @@ const Inventory = () => {
     }
   }, [lastScannedBarcode]);
 
-  // Use the live inventory array as the base data source
+  // Use inventory state as the source of truth for display
   const baseData: InventoryItem[] = inventory;
 
   const groupedData: ProductWithBatches[] = useMemo(() => {

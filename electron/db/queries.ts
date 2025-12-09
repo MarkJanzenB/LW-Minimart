@@ -23,10 +23,30 @@ interface InventoryMirrorRow {
 // Products queries
 export function getProducts() {
   const sql = `
-    SELECT p.*, SUM(b.quantity) as stock_quantity
+    SELECT 
+      p.id,
+      p.sku,
+      p.barcode,
+      p.name,
+      p.description,
+      p.category_id,
+      p.supplier_id,
+      p.unit_id,
+      p.purchase_price,
+      p.selling_price as price,
+      p.reorder_threshold,
+      p.image_url,
+      p.is_active,
+      p.created_at,
+      COALESCE(SUM(b.quantity), 0) as stock_quantity,
+      COALESCE(SUM(b.quantity), 0) as stock,
+      c.name as category
     FROM products p
     LEFT JOIN batches b ON p.id = b.product_id
+    LEFT JOIN categories c ON p.category_id = c.id
+    WHERE p.is_active = 1
     GROUP BY p.id
+    ORDER BY p.name
   `;
   try {
     return db.prepare(sql).all();
@@ -38,10 +58,28 @@ export function getProducts() {
 
 export function getProductByBarcode(barcode: string) {
   const sql = `
-    SELECT p.*, SUM(b.quantity) as stock_quantity
+    SELECT 
+      p.id,
+      p.sku,
+      p.barcode,
+      p.name,
+      p.description,
+      p.category_id,
+      p.supplier_id,
+      p.unit_id,
+      p.purchase_price,
+      p.selling_price as price,
+      p.reorder_threshold,
+      p.image_url,
+      p.is_active,
+      p.created_at,
+      COALESCE(SUM(b.quantity), 0) as stock_quantity,
+      COALESCE(SUM(b.quantity), 0) as stock,
+      c.name as category
     FROM products p
     LEFT JOIN batches b ON p.id = b.product_id
-    WHERE p.barcode = ?
+    LEFT JOIN categories c ON p.category_id = c.id
+    WHERE p.barcode = ? AND p.is_active = 1
     GROUP BY p.id
   `;
   try {
@@ -273,6 +311,7 @@ export function getInventoryItems() {
       p.name,
       p.selling_price as price,
       p.reorder_threshold as minStock,
+      p.image_url,
       c.name as category,
       COALESCE(SUM(b.quantity), 0) as stock,
       MAX(b.expiry_date) as expiryDate,
@@ -475,6 +514,20 @@ export function getDashboardMetrics() {
   const lowStockResult = lowStockStmt.all() as any[];
   const lowStockCount = lowStockResult.length;
 
+  // Get products nearing expiry (next 7 days)
+  const expiringSoonStmt = db.prepare(`
+    SELECT COUNT(DISTINCT p.id) as expiringSoonCount
+    FROM products p
+    LEFT JOIN batches b ON p.id = b.product_id
+    WHERE p.is_active = 1
+      AND b.expiry_date IS NOT NULL
+      AND b.expiry_date > date('now')
+      AND b.expiry_date <= date('now', '+7 days')
+      AND COALESCE(b.quantity, 0) > 0
+  `);
+  const expiringSoonRow = expiringSoonStmt.get() as any;
+  const expiringSoonCount = expiringSoonRow?.expiringSoonCount || 0;
+
   // Get recent transactions for chart data
   const recentTransactionsStmt = db.prepare(`
     SELECT 
@@ -543,9 +596,203 @@ export function getDashboardMetrics() {
       totalProducts: inventory?.totalProducts || 0,
       totalStock: inventory?.totalStock || 0,
       lowStockCount: lowStockCount || 0,
+      expiringSoonCount,
     },
     recentTransactions: recentTransactions || [],
     topProducts: topProducts || [],
     inventoryByCategory: inventoryByCategory || [],
   };
+}
+
+// Create or update product in SQLite (single source of truth)
+export function createProduct(productData: {
+  name: string;
+  sku?: string;
+  barcode?: string;
+  description?: string;
+  category_id?: number;
+  supplier_id?: number;
+  unit_id?: number;
+  purchase_price: number;
+  selling_price: number;
+  reorder_threshold?: number;
+  batch_code?: string;
+  quantity?: number;
+  expiry_date?: string;
+  cost_per_unit?: number;
+}) {
+  return db.transaction(() => {
+    // First, get or create category
+    let categoryId: number | null = null;
+    if (productData.category_id) {
+      categoryId = productData.category_id;
+    } else {
+      // Try to find category by name (if passed as string in future)
+      // For now, we'll use the provided category_id or null
+    }
+
+    // Insert product
+    const insertProduct = db.prepare(`
+      INSERT INTO products (
+        sku, barcode, name, description, category_id, supplier_id, unit_id,
+        purchase_price, selling_price, reorder_threshold, image_url, is_active
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+    `);
+    
+    const productResult = insertProduct.run(
+      productData.sku || null,
+      productData.barcode || null,
+      productData.name,
+      productData.description || null,
+      categoryId,
+      productData.supplier_id || null,
+      productData.unit_id || null,
+      productData.purchase_price || 0,
+      productData.selling_price || 0,
+      productData.reorder_threshold || 0,
+      productData.image_url || null
+    );
+    
+    const productId = productResult.lastInsertRowid as number;
+
+    // Insert batch if quantity is provided
+    if (productData.quantity && productData.quantity > 0) {
+      const insertBatch = db.prepare(`
+        INSERT INTO batches (
+          product_id, batch_code, quantity, expiry_date, cost_per_unit, received_date
+        ) VALUES (?, ?, ?, ?, ?, datetime('now'))
+      `);
+      
+      insertBatch.run(
+        productId,
+        productData.batch_code || null,
+        productData.quantity,
+        productData.expiry_date || null,
+        productData.cost_per_unit || productData.purchase_price || 0
+      );
+    }
+
+    return { id: productId };
+  })();
+}
+
+// Update product in SQLite
+export function updateProduct(productId: number, productData: {
+  name?: string;
+  sku?: string;
+  barcode?: string;
+  description?: string;
+  category_id?: number;
+  supplier_id?: number;
+  unit_id?: number;
+  purchase_price?: number;
+  selling_price?: number;
+  reorder_threshold?: number;
+  is_active?: number;
+}) {
+  const updates: string[] = [];
+  const values: any[] = [];
+
+  if (productData.name !== undefined) {
+    updates.push('name = ?');
+    values.push(productData.name);
+  }
+  if (productData.sku !== undefined) {
+    updates.push('sku = ?');
+    values.push(productData.sku);
+  }
+  if (productData.barcode !== undefined) {
+    updates.push('barcode = ?');
+    values.push(productData.barcode);
+  }
+  if (productData.description !== undefined) {
+    updates.push('description = ?');
+    values.push(productData.description);
+  }
+  if (productData.category_id !== undefined) {
+    updates.push('category_id = ?');
+    values.push(productData.category_id);
+  }
+  if (productData.supplier_id !== undefined) {
+    updates.push('supplier_id = ?');
+    values.push(productData.supplier_id);
+  }
+  if (productData.unit_id !== undefined) {
+    updates.push('unit_id = ?');
+    values.push(productData.unit_id);
+  }
+  if (productData.purchase_price !== undefined) {
+    updates.push('purchase_price = ?');
+    values.push(productData.purchase_price);
+  }
+  if (productData.selling_price !== undefined) {
+    updates.push('selling_price = ?');
+    values.push(productData.selling_price);
+  }
+  if (productData.reorder_threshold !== undefined) {
+    updates.push('reorder_threshold = ?');
+    values.push(productData.reorder_threshold);
+  }
+  if (productData.image_url !== undefined) {
+    updates.push('image_url = ?');
+    values.push(productData.image_url);
+  }
+  if (productData.is_active !== undefined) {
+    updates.push('is_active = ?');
+    values.push(productData.is_active);
+  }
+
+  if (updates.length === 0) {
+    return { id: productId };
+  }
+
+  values.push(productId);
+  const sql = `UPDATE products SET ${updates.join(', ')} WHERE id = ?`;
+  db.prepare(sql).run(...values);
+  
+  return { id: productId };
+}
+
+// Add batch to existing product
+export function addBatchToProduct(productId: number, batchData: {
+  batch_code?: string;
+  quantity: number;
+  expiry_date?: string;
+  cost_per_unit?: number;
+}) {
+  const insertBatch = db.prepare(`
+    INSERT INTO batches (
+      product_id, batch_code, quantity, expiry_date, cost_per_unit, received_date
+    ) VALUES (?, ?, ?, ?, ?, datetime('now'))
+  `);
+  
+  const result = insertBatch.run(
+    productId,
+    batchData.batch_code || null,
+    batchData.quantity,
+    batchData.expiry_date || null,
+    batchData.cost_per_unit || 0
+  );
+  
+  return { id: result.lastInsertRowid as number };
+}
+
+// Get or create category by name
+export function getOrCreateCategory(categoryName: string): number {
+  const getCategory = db.prepare('SELECT id FROM categories WHERE name = ?');
+  const existing = getCategory.get(categoryName) as { id: number } | undefined;
+  
+  if (existing) {
+    return existing.id;
+  }
+  
+  const insertCategory = db.prepare('INSERT INTO categories (name) VALUES (?)');
+  const result = insertCategory.run(categoryName);
+  return result.lastInsertRowid as number;
+}
+
+// Delete product (soft delete by setting is_active = 0)
+export function deleteProduct(productId: number) {
+  const stmt = db.prepare('UPDATE products SET is_active = 0 WHERE id = ?');
+  stmt.run(productId);
 }

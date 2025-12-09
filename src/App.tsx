@@ -13,9 +13,11 @@ import Reports from "./pages/Reports";
 import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
 import PosPage from "./pages/POSPage";
-import TransactionHistoryPage from "./pages/TransactionHistoryPage";
+import Products from "./pages/Products";
+import Cashflow from "./pages/Cashflow";
 import Layout from "./components/Layout"; 
 import Inventory from "./pages/Inventory";
+import TransactionHistoryPage from "./pages/TransactionHistoryPage";
 import SalesHistoryPage from "./pages/SalesHistoryPage";
 import RestockHistoryPage from "./pages/RestockHistoryPage";
 import SpoilageHistoryPage from "./pages/SpoilageHistoryPage";
@@ -39,14 +41,16 @@ const App = () => (
           <Route element={<Layout />}>
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/pos" element={<PosPage />} />
-            <Route path="/pos/history" element={<TransactionHistoryPage />} />
             <Route path="/inventory" element={<Inventory />} />
+            <Route path="/cashflow" element={<Cashflow />} />
+            <Route path="/products" element={<Products />} />
+            <Route path="/reports" element={<Reports />} />
+            <Route path="/settings" element={<Settings />} />
+            <Route path="/history" element={<TransactionHistoryPage />} />
+            <Route path="/history/transactions" element={<TransactionHistoryPage />} />
             <Route path="/history/sales" element={<SalesHistoryPage />} />
             <Route path="/history/restock" element={<RestockHistoryPage />} />
             <Route path="/history/spoilage" element={<SpoilageHistoryPage />} />
-            <Route path="/cashflow" element={<Dashboard />} />
-            <Route path="/reports" element={<Reports />} />
-            <Route path="/settings" element={<Settings />} />
           </Route>
           <Route path="*" element={<NotFound />} />
         </Routes>

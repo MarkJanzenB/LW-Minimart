@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { dbService, Product } from '@/services/database';
+import { Product } from '@/services/database';
 import { toast } from 'sonner';
 
 interface EditProductDialogProps {
@@ -95,33 +95,48 @@ export function EditProductDialog({
 
     setIsSaving(true);
     try {
-      const newStock = parseInt(formData.stock) || 0;
-      const newStatus = newStock === 0 ? 'Out of Stock' : product.status;
+      // Get product ID - handle both string and number IDs
+      const productId = typeof product.id === 'string' ? parseInt(product.id) : product.id;
+      if (isNaN(productId)) {
+        throw new Error('Invalid product ID');
+      }
 
-      await dbService.updateProduct({
-        ...product,
-        ...{
-          name: formData.name,
-          sku: formData.sku,
-          category: formData.category,
-          supplier: formData.supplier,
-          cost: parseFloat(formData.cost) || 0,
-          price: parseFloat(formData.price) || 0,
-          stock: newStock,
-          minStock: parseInt(formData.minStock) || 0,
-          expiryDate: formData.expiryDate,
-          batchNo: formData.batchNo,
-          barcode: formData.barcode,
-          imageUrl: formData.imageUrl || undefined,
-          status: newStatus,
-        },
-      });
-      toast.success('Product updated successfully');
-      onProductUpdated();
-      onClose();
-    } catch (error) {
+      // Prepare update data for SQLite
+      const costValue = formData.cost ? parseFloat(formData.cost) : 0;
+      const priceValue = formData.price ? parseFloat(formData.price) : 0;
+      const minStockValue = formData.minStock ? parseInt(formData.minStock) : 0;
+
+      const updateData: any = {
+        name: formData.name.trim(),
+        sku: formData.sku || undefined,
+        barcode: formData.barcode || undefined,
+        category: formData.category || undefined,
+        cost: isNaN(costValue) ? 0 : costValue,
+        price: isNaN(priceValue) ? 0 : priceValue,
+        minStock: isNaN(minStockValue) ? 0 : minStockValue,
+        imageUrl: formData.imageUrl || undefined,
+      };
+
+      // Use SQLite API (single source of truth)
+      if (typeof window !== 'undefined' && (window as any).api?.products?.update) {
+        const response = await (window as any).api.products.update(productId, updateData);
+        
+        if (response && response.success) {
+          console.log('Product updated successfully in SQLite:', response.data);
+          toast.success('Product updated successfully');
+          // Small delay to ensure database write is complete
+          await new Promise(resolve => setTimeout(resolve, 100));
+          onProductUpdated();
+          onClose();
+        } else {
+          throw new Error(response?.message || 'Failed to update product');
+        }
+      } else {
+        throw new Error('Product update API not available');
+      }
+    } catch (error: any) {
       console.error('Error updating product:', error);
-      toast.error('Failed to update product');
+      toast.error(error.message || 'Failed to update product');
     } finally {
       setIsSaving(false);
     }
@@ -248,6 +263,7 @@ export function EditProductDialog({
                 type="date"
                 value={formData.expiryDate}
                 onChange={handleChange}
+                // No min restriction - allow past dates for expired products
               />
             </div>
 

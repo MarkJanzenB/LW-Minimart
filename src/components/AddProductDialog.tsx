@@ -68,6 +68,39 @@ export function AddProductDialog({ isOpen, onClose, onProductAdded }: AddProduct
       return;
     }
     try {
+      // Check SQLite first (single source of truth)
+      if (typeof window !== 'undefined' && (window as any).api?.products?.getAll) {
+        const response = await (window as any).api.products.getAll();
+        if (response.success && response.data) {
+          const match = response.data.find((p: any) => 
+            p.name && p.name.toLowerCase() === trimmed.toLowerCase()
+          );
+          if (match) {
+            // Map SQLite product to Product format for existing product check
+            setExistingProduct({
+              id: match.id.toString(),
+              name: match.name,
+              sku: match.sku || '',
+              category: match.category || 'Uncategorized',
+              supplier: '',
+              cost: match.purchase_price || 0,
+              price: match.price || match.selling_price || 0,
+              stock: match.stock_quantity || match.stock || 0,
+              minStock: match.reorder_threshold || 0,
+              expiryDate: '',
+              status: 'In Stock',
+              batchNo: '',
+              barcode: match.barcode || '',
+              imageUrl: '',
+              createdAt: '',
+              updatedAt: '',
+            });
+            return;
+          }
+        }
+      }
+      
+      // Fallback to IndexedDB only if SQLite not available
       const products = await dbService.getProducts();
       const match = products.find((p) => p.name.toLowerCase() === trimmed.toLowerCase()) || null;
       setExistingProduct(match);
@@ -110,7 +143,6 @@ export function AddProductDialog({ isOpen, onClose, onProductAdded }: AddProduct
   };
 
   const generateSkuForCategory = async (category: string) => {
-    const allProducts = await dbService.getProducts();
     const skuPrefixMap: Record<string, string> = {
       Beverages: 'B',
       Food: 'F',
@@ -119,15 +151,45 @@ export function AddProductDialog({ isOpen, onClose, onProductAdded }: AddProduct
       Other: 'O',
     };
     const prefix = skuPrefixMap[category] ?? 'O';
-    const existingForCategory = allProducts.filter(
-      (p) => p.category === category && p.sku.startsWith(`${prefix}-`)
-    );
-    const skuCounter = existingForCategory.length;
-    const generatedSku = `${prefix}-${skuCounter.toString().padStart(3, '0')}`;
-    setFormData(prev => ({
-      ...prev,
-      sku: generatedSku
-    }));
+    
+    try {
+      // Get products from SQLite (single source of truth)
+      if (typeof window !== 'undefined' && (window as any).api?.products?.getAll) {
+        const response = await (window as any).api.products.getAll();
+        if (response.success && response.data) {
+          const existingForCategory = response.data.filter(
+            (p: any) => (p.category || 'Uncategorized') === category && 
+                       p.sku && p.sku.startsWith(`${prefix}-`)
+          );
+          const skuCounter = existingForCategory.length;
+          const generatedSku = `${prefix}-${skuCounter.toString().padStart(3, '0')}`;
+          setFormData(prev => ({
+            ...prev,
+            sku: generatedSku
+          }));
+          return;
+        }
+      }
+      
+      // Fallback to IndexedDB only if SQLite not available
+      const allProducts = await dbService.getProducts();
+      const existingForCategory = allProducts.filter(
+        (p) => p.category === category && p.sku && p.sku.startsWith(`${prefix}-`)
+      );
+      const skuCounter = existingForCategory.length;
+      const generatedSku = `${prefix}-${skuCounter.toString().padStart(3, '0')}`;
+      setFormData(prev => ({
+        ...prev,
+        sku: generatedSku
+      }));
+    } catch (error) {
+      console.error('Error generating SKU:', error);
+      // Default SKU if error
+      setFormData(prev => ({
+        ...prev,
+        sku: `${prefix}-000`
+      }));
+    }
   };
 
   const handleRestockFieldChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -163,52 +225,97 @@ export function AddProductDialog({ isOpen, onClose, onProductAdded }: AddProduct
       const parsedStock = parseInt(formData.stock) || 0;
       const normalizedStock = parsedStock === 0 ? 1 : parsedStock;
 
-      const allProducts = await dbService.getProducts();
-      const trimmedName = formData.name.trim().toLowerCase();
-      const existingCountForName = allProducts.filter(
-        (p) => p.name.trim().toLowerCase() === trimmedName
-      ).length;
-
-      const counter = existingCountForName + 1;
+      // Generate batch number
       const now = new Date();
       const mm = String(now.getMonth() + 1).padStart(2, '0');
       const dd = String(now.getDate()).padStart(2, '0');
       const yy = String(now.getFullYear()).slice(-2);
       const datePart = `${mm}${dd}${yy}`;
-      const generatedBatchNo = `BT-${counter}-${datePart}`;
+      const generatedBatchNo = `BT-${Date.now()}-${datePart}`;
 
-      await dbService.addProduct({
-        ...formData,
-        sku: formData.sku,
-        cost: parseFloat(formData.cost) || 0,
-        price: parseFloat(formData.price) || 0,
-        stock: normalizedStock,
-        minStock: parseInt(formData.minStock) || 0,
-        batchNo: generatedBatchNo,
-        status: normalizedStock > 0 ? 'In Stock' : 'Out of Stock',
-      });
-      
-      toast.success('Product added successfully');
-      onProductAdded();
-      onClose();
-      // Reset form
-      setFormData({
-        name: '',
-        sku: '',
-        category: '',
-        supplier: '',
-        cost: '',
-        price: '',
-        stock: '',
-        minStock: '',
-        expiryDate: '',
-        batchNo: '',
-        barcode: '',
-        imageUrl: ''
-      });
-    } catch (error) {
+      // Save to SQLite database (single source of truth)
+      if (typeof window !== 'undefined' && (window as any).api?.products?.create) {
+        // Use nullish coalescing to preserve 0 values
+        const costValue = formData.cost ? parseFloat(formData.cost) : 0;
+        const priceValue = formData.price ? parseFloat(formData.price) : 0;
+        const minStockValue = formData.minStock ? parseInt(formData.minStock) : 0;
+        
+        const response = await (window as any).api.products.create({
+          name: formData.name.trim(),
+          sku: formData.sku || undefined,
+          barcode: formData.barcode || undefined,
+          category: formData.category || undefined,
+          cost: isNaN(costValue) ? 0 : costValue,
+          price: isNaN(priceValue) ? 0 : priceValue,
+          minStock: isNaN(minStockValue) ? 0 : minStockValue,
+          imageUrl: formData.imageUrl || undefined,
+          batchNo: generatedBatchNo,
+          stock: normalizedStock,
+          expiryDate: formData.expiryDate || undefined,
+        });
+
+        if (response.success) {
+          console.log('Product created successfully in SQLite:', response.data);
+          toast.success('Product added successfully');
+          // Small delay to ensure database write is complete
+          await new Promise(resolve => setTimeout(resolve, 100));
+          onProductAdded();
+          onClose();
+          // Reset form
+          setFormData({
+            name: '',
+            sku: '',
+            category: '',
+            supplier: '',
+            cost: '',
+            price: '',
+            stock: '',
+            minStock: '',
+            expiryDate: '',
+            batchNo: '',
+            barcode: '',
+            imageUrl: ''
+          });
+        } else {
+          throw new Error(response.message || 'Failed to add product');
+        }
+      } else {
+        // Fallback to IndexedDB if Electron API not available (web mode)
+        const costValue = formData.cost ? parseFloat(formData.cost) : 0;
+        const priceValue = formData.price ? parseFloat(formData.price) : 0;
+        const minStockValue = formData.minStock ? parseInt(formData.minStock) : 0;
+        
+        await dbService.addProduct({
+          ...formData,
+          sku: formData.sku,
+          cost: isNaN(costValue) ? 0 : costValue,
+          price: isNaN(priceValue) ? 0 : priceValue,
+          stock: normalizedStock,
+          minStock: isNaN(minStockValue) ? 0 : minStockValue,
+          batchNo: generatedBatchNo,
+          status: normalizedStock > 0 ? 'In Stock' : 'Out of Stock',
+        });
+        toast.success('Product added successfully (local only)');
+        onProductAdded();
+        onClose();
+        setFormData({
+          name: '',
+          sku: '',
+          category: '',
+          supplier: '',
+          cost: '',
+          price: '',
+          stock: '',
+          minStock: '',
+          expiryDate: '',
+          batchNo: '',
+          barcode: '',
+          imageUrl: ''
+        });
+      }
+    } catch (error: any) {
       console.error('Error adding product:', error);
-      toast.error('Failed to add product');
+      toast.error(error.message || 'Failed to add product');
     } finally {
       setIsLoading(false);
     }
@@ -221,61 +328,100 @@ export function AddProductDialog({ isOpen, onClose, onProductAdded }: AddProduct
     setIsRestocking(true);
     try {
       const additionalStock = parseInt(restockData.stock) || 0;
+      if (additionalStock <= 0) {
+        toast.error('Please enter a valid stock quantity');
+        return;
+      }
 
-      // Ensure we don't violate the unique SKU index in IndexedDB.
-      // For restock batches we generate a distinct SKU, while the
-      // Inventory UI groups by name and ignores SKU.
-      const restockSku = `${existingProduct.sku}-RS-${Date.now()}`;
-
-      const allProducts = await dbService.getProducts();
-      const trimmedName = existingProduct.name.trim().toLowerCase();
-      const existingCountForName = allProducts.filter(
-        (p) => p.name.trim().toLowerCase() === trimmedName
-      ).length;
-
-      const counter = existingCountForName + 1;
+      // Generate batch number
       const now = new Date();
       const mm = String(now.getMonth() + 1).padStart(2, '0');
       const dd = String(now.getDate()).padStart(2, '0');
       const yy = String(now.getFullYear()).slice(-2);
       const datePart = `${mm}${dd}${yy}`;
-      const generatedBatchNo = `BT-${counter}-${datePart}`;
+      const generatedBatchNo = restockData.batchNo || `BT-${Date.now()}-${datePart}`;
 
-      const newProductId = await dbService.addProduct({
-        name: existingProduct.name,
-        sku: restockSku,
-        category: existingProduct.category,
-        supplier: existingProduct.supplier,
-        cost: existingProduct.cost,
-        price: existingProduct.price,
-        stock: additionalStock,
-        minStock: existingProduct.minStock,
-        expiryDate: restockData.expiryDate || existingProduct.expiryDate,
-        status: additionalStock > 0 ? 'In Stock' : 'Out of Stock',
-        batchNo: generatedBatchNo,
-        barcode: restockData.barcode,
-        imageUrl: existingProduct.imageUrl,
-      });
+      // Add batch to existing product in SQLite
+      if (typeof window !== 'undefined' && (window as any).api?.products?.addBatch) {
+        // First, find the product ID from SQLite by name or barcode
+        const productsResponse = await (window as any).api.products.getAll();
+        if (productsResponse.success && productsResponse.data) {
+          const product = productsResponse.data.find((p: any) => 
+            p.name === existingProduct.name || p.barcode === existingProduct.barcode
+          );
+          
+          if (product) {
+            const batchResponse = await (window as any).api.products.addBatch(product.id, {
+              batchNo: generatedBatchNo,
+              stock: additionalStock,
+              expiryDate: restockData.expiryDate || existingProduct.expiryDate,
+              cost: existingProduct.cost,
+            });
 
-      await dbService.addRestockRecord({
-        productId: existingProduct.id,
-        productName: existingProduct.name,
-        originalSku: existingProduct.sku,
-        restockSku,
-        quantity: additionalStock,
-        batchNo: generatedBatchNo,
-        expiryDate: restockData.expiryDate || existingProduct.expiryDate,
-        barcode: restockData.barcode,
-      });
+            if (batchResponse.success) {
+              toast.success('Product restocked successfully');
+              onProductAdded();
+              setIsRestockDialogOpen(false);
+              setRestockData({ stock: '', batchNo: '', expiryDate: '', barcode: '' });
+              onClose();
+            } else {
+              throw new Error(batchResponse.message || 'Failed to add batch');
+            }
+          } else {
+            // Product not found in SQLite, create it
+            const createResponse = await (window as any).api.products.create({
+              name: existingProduct.name,
+              sku: existingProduct.sku,
+              barcode: restockData.barcode || existingProduct.barcode,
+              category: existingProduct.category,
+              cost: existingProduct.cost,
+              price: existingProduct.price,
+              minStock: existingProduct.minStock,
+              batchNo: generatedBatchNo,
+              stock: additionalStock,
+              expiryDate: restockData.expiryDate || existingProduct.expiryDate,
+            });
 
-      toast.success('Product restocked successfully');
-      onProductAdded();
-      setIsRestockDialogOpen(false);
-      setRestockData({ stock: '', batchNo: '', expiryDate: '', barcode: '' });
-      onClose();
-    } catch (error) {
+            if (createResponse.success) {
+              toast.success('Product restocked successfully');
+              onProductAdded();
+              setIsRestockDialogOpen(false);
+              setRestockData({ stock: '', batchNo: '', expiryDate: '', barcode: '' });
+              onClose();
+            } else {
+              throw new Error(createResponse.message || 'Failed to create product');
+            }
+          }
+        } else {
+          throw new Error('Failed to fetch products');
+        }
+      } else {
+        // Fallback to IndexedDB
+        const restockSku = `${existingProduct.sku}-RS-${Date.now()}`;
+        await dbService.addProduct({
+          name: existingProduct.name,
+          sku: restockSku,
+          category: existingProduct.category,
+          supplier: existingProduct.supplier,
+          cost: existingProduct.cost,
+          price: existingProduct.price,
+          stock: additionalStock,
+          minStock: existingProduct.minStock,
+          expiryDate: restockData.expiryDate || existingProduct.expiryDate,
+          status: additionalStock > 0 ? 'In Stock' : 'Out of Stock',
+          batchNo: generatedBatchNo,
+          barcode: restockData.barcode,
+          imageUrl: existingProduct.imageUrl,
+        });
+        toast.success('Product restocked successfully (local only)');
+        onProductAdded();
+        setIsRestockDialogOpen(false);
+        setRestockData({ stock: '', batchNo: '', expiryDate: '', barcode: '' });
+        onClose();
+      }
+    } catch (error: any) {
       console.error('Error restocking product:', error);
-      toast.error('Failed to restock product');
+      toast.error(error.message || 'Failed to restock product');
     } finally {
       setIsRestocking(false);
     }
