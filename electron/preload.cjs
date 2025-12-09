@@ -26,6 +26,10 @@ contextBridge.exposeInMainWorld("api", {
     getAll: () => ipcRenderer.invoke("products:getAll"),
     getByBarcode: (barcode) => ipcRenderer.invoke("products:getByBarcode", barcode),
     getInventory: () => ipcRenderer.invoke("products:getInventory"),
+    create: (productData) => ipcRenderer.invoke("products:create", productData),
+    update: (productId, productData) => ipcRenderer.invoke("products:update", productId, productData),
+    addBatch: (productId, batchData) => ipcRenderer.invoke("products:addBatch", productId, batchData),
+    delete: (productId) => ipcRenderer.invoke("products:delete", productId),
   },
   transactions: {
     getAll: (limit, offset) => ipcRenderer.invoke("transactions:getAll", limit, offset),

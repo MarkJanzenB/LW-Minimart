@@ -36,28 +36,46 @@ function PosPage() {
   const cartItemsRef = useRef<(HTMLDivElement | null)[]>([]);
   const productItemsRef = useRef<(HTMLDivElement | null)[]>([]);
 
-  // Fetch products from database
+  // Fetch products from SQLite database (single source of truth)
   useEffect(() => {
     const fetchProducts = async () => {
       try {
         setLoading(true);
-        const response = await (window as any).api.products.getAll();
-        if (response.success && response.data) {
-          // Map database products to Product interface
-          const mappedProducts: Product[] = response.data.map((p: any) => ({
-            id: p.id.toString(),
-            name: p.name,
-            code: p.sku || p.barcode || `PROD-${p.id}`,
-            price: parseFloat(p.price) || 0,
-            stock: parseInt(p.stock ?? p.stock_quantity) || 0,
-            barcode: p.barcode || '',
-            category: p.category || 'Uncategorized',
-            color: undefined,
-          }));
-          setProducts(mappedProducts);
+        console.log('POS: Fetching products from SQLite...');
+        
+        // Use products:getAll which fetches from SQLite
+        if (typeof window !== 'undefined' && (window as any).api?.products?.getAll) {
+          const response = await (window as any).api.products.getAll();
+          console.log('POS: Products response:', response);
+          
+          if (response && response.success && Array.isArray(response.data)) {
+            // Map SQLite database products to Product interface
+            const mappedProducts: Product[] = response.data
+              .filter((p: any) => p.is_active !== 0) // Only active products
+              .map((p: any) => ({
+                id: p.id?.toString() ?? '',
+                name: p.name ?? '',
+                code: p.sku || p.barcode || `PROD-${p.id}`,
+                price: Number(p.price ?? p.selling_price ?? 0),
+                stock: Number(p.stock ?? p.stock_quantity ?? 0),
+                barcode: p.barcode ?? '',
+                category: p.category ?? 'Uncategorized',
+                color: undefined,
+              }));
+            
+            console.log(`POS: Loaded ${mappedProducts.length} products from SQLite`);
+            setProducts(mappedProducts);
+          } else {
+            console.warn('POS: Invalid response from products:getAll', response);
+            setProducts([]);
+          }
+        } else {
+          console.error('POS: products:getAll API not available');
+          setProducts([]);
         }
       } catch (error) {
-        console.error('Failed to fetch products:', error);
+        console.error('POS: Failed to fetch products:', error);
+        setProducts([]);
       } finally {
         setLoading(false);
       }
@@ -178,27 +196,43 @@ function PosPage() {
 
   const clearCart = () => setCart([]);
 
-  // Handle barcode scanning/search
+  // Handle barcode scanning/search (from SQLite)
   useEffect(() => {
     if (searchQuery.length >= 8) { // Barcode length is typically 8+ digits
       const handleBarcodeSearch = async () => {
         try {
+          console.log('POS: Searching for barcode:', searchQuery);
           const response = await (window as any).api.products.getByBarcode(searchQuery);
-          if (response.success && response.data) {
+          console.log('POS: Barcode search response:', response);
+          
+          if (response && response.success && response.data) {
             const product = response.data;
+            
+            // Only add if product is active
+            if (product.is_active === 0) {
+              console.warn('POS: Product found but is inactive:', product.name);
+              return;
+            }
+            
             const mappedProduct: Product = {
-              id: product.id.toString(),
-              name: product.name,
+              id: product.id?.toString() ?? '',
+              name: product.name ?? '',
               code: product.sku || product.barcode || `PROD-${product.id}`,
-              price: parseFloat(product.price) || 0,
-              stock: parseInt(product.stock) || 0,
-              category: product.category || 'Uncategorized',
+              price: Number(product.price ?? product.selling_price ?? 0),
+              stock: Number(product.stock ?? product.stock_quantity ?? 0),
+              barcode: product.barcode ?? '',
+              category: product.category ?? 'Uncategorized',
+              color: undefined,
             };
+            
+            console.log('POS: Adding product to cart via barcode:', mappedProduct);
             addToCart(mappedProduct);
-            setSearchQuery('');
+            setSearchQuery(''); // Clear search after adding
+          } else {
+            console.log('POS: No product found for barcode:', searchQuery);
           }
         } catch (error) {
-          console.error('Failed to search by barcode:', error);
+          console.error('POS: Barcode search failed:', error);
         }
       };
       
@@ -207,7 +241,7 @@ function PosPage() {
       return () => clearTimeout(timeoutId);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchQuery]);
+  }, [searchQuery, addToCart]);
 
   const handleCheckout = () => {
     if (cart.length > 0) setView('checkout');
@@ -229,7 +263,7 @@ function PosPage() {
         total_amount: total,
         payment_method: method,
         items: cart.map(item => ({
-          product_id: parseInt(item.id),
+          product_id: Number(item.id),
           quantity: item.quantity,
           unit_price: item.price,
           subtotal: item.price * item.quantity,
@@ -259,18 +293,26 @@ function PosPage() {
         setCart([]);
         playKaChing();
         
-        // Refresh products to update stock
+        // Refresh products from SQLite to update stock after transaction
+        console.log('POS: Refreshing products after transaction...');
         const productsResponse = await (window as any).api.products.getAll();
-        if (productsResponse.success && productsResponse.data) {
-          const mappedProducts: Product[] = productsResponse.data.map((p: any) => ({
-            id: p.id.toString(),
-            name: p.name,
-            code: p.sku || p.barcode || `PROD-${p.id}`,
-            price: parseFloat(p.price) || 0,
-            stock: parseInt(p.stock) || parseInt(p.stock_quantity) || 0,
-            category: p.category || 'Uncategorized',
-          }));
+        if (productsResponse && productsResponse.success && Array.isArray(productsResponse.data)) {
+          const mappedProducts: Product[] = productsResponse.data
+            .filter((p: any) => p.is_active !== 0) // Only active products
+            .map((p: any) => ({
+              id: p.id?.toString() ?? '',
+              name: p.name ?? '',
+              code: p.sku || p.barcode || `PROD-${p.id}`,
+              price: Number(p.price ?? p.selling_price ?? 0),
+              stock: Number(p.stock ?? p.stock_quantity ?? 0),
+              barcode: p.barcode ?? '',
+              category: p.category ?? 'Uncategorized',
+              color: undefined,
+            }));
+          console.log(`POS: Refreshed ${mappedProducts.length} products from SQLite`);
           setProducts(mappedProducts);
+        } else {
+          console.warn('POS: Failed to refresh products after transaction', productsResponse);
         }
       } else {
         throw new Error(response.message || 'Failed to save transaction');

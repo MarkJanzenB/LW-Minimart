@@ -29,3 +29,12 @@ try {
     console.error("Failed to update sales table:", e);
   }
 }
+
+try {
+  db.exec("ALTER TABLE products ADD COLUMN image_url TEXT");
+} catch (e) {
+  const message = e instanceof Error ? e.message : String(e);
+  if (!message.includes("duplicate column name")) {
+    console.error("Failed to update products table:", e);
+  }
+}

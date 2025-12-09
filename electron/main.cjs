@@ -67,6 +67,16 @@ try {
   console.error("Failed to apply database schema:", e);
 }
 
+// Migrations for existing databases
+try {
+  db.exec("ALTER TABLE products ADD COLUMN image_url TEXT");
+} catch (e) {
+  const message = e instanceof Error ? e.message : String(e);
+  if (!message.includes("duplicate column name")) {
+    console.error("Failed to add image_url column to products table:", e);
+  }
+}
+
 // No default users - users must be created through owner-setup
 registerAuthIpc(db);
 
@@ -138,10 +148,27 @@ ipcMain.handle("products:getAll", () => {
   try {
     const stmt = db.prepare(`
       SELECT 
-        p.*,
-        COALESCE(SUM(b.quantity), 0) AS stock_quantity
+        p.id,
+        p.sku,
+        p.barcode,
+        p.name,
+        p.description,
+        p.category_id,
+        p.supplier_id,
+        p.unit_id,
+        p.purchase_price,
+        p.selling_price as price,
+        p.reorder_threshold,
+        p.image_url,
+        p.is_active,
+        p.created_at,
+        COALESCE(SUM(b.quantity), 0) as stock_quantity,
+        COALESCE(SUM(b.quantity), 0) as stock,
+        COALESCE(c.name, 'Uncategorized') as category
       FROM products p
-      LEFT JOIN batches b ON b.product_id = p.id
+      LEFT JOIN batches b ON p.id = b.product_id
+      LEFT JOIN categories c ON p.category_id = c.id
+      WHERE p.is_active = 1
       GROUP BY p.id
       ORDER BY p.name
     `);
@@ -156,11 +183,27 @@ ipcMain.handle("products:getByBarcode", (_event, barcode) => {
   try {
     const stmt = db.prepare(`
       SELECT 
-        p.*,
-        COALESCE(SUM(b.quantity), 0) AS stock_quantity
+        p.id,
+        p.sku,
+        p.barcode,
+        p.name,
+        p.description,
+        p.category_id,
+        p.supplier_id,
+        p.unit_id,
+        p.purchase_price,
+        p.selling_price as price,
+        p.reorder_threshold,
+        p.image_url,
+        p.is_active,
+        p.created_at,
+        COALESCE(SUM(b.quantity), 0) as stock_quantity,
+        COALESCE(SUM(b.quantity), 0) as stock,
+        COALESCE(c.name, 'Uncategorized') as category
       FROM products p
-      LEFT JOIN batches b ON b.product_id = p.id
-      WHERE p.barcode = ?
+      LEFT JOIN batches b ON p.id = b.product_id
+      LEFT JOIN categories c ON p.category_id = c.id
+      WHERE p.barcode = ? AND p.is_active = 1
       GROUP BY p.id
       LIMIT 1
     `);
@@ -168,6 +211,246 @@ ipcMain.handle("products:getByBarcode", (_event, barcode) => {
     return { success: true, data: product || null };
   } catch (error) {
     console.error("Failed to get product by barcode:", error);
+    return { success: false, message: error.message };
+  }
+});
+
+ipcMain.handle("products:getInventory", () => {
+  try {
+    const stmt = db.prepare(`
+      SELECT 
+        p.id,
+        p.sku,
+        p.barcode,
+        p.name,
+        p.selling_price as price,
+        p.reorder_threshold as minStock,
+        p.image_url,
+        COALESCE(c.name, 'Uncategorized') as category,
+        COALESCE(SUM(b.quantity), 0) as stock,
+        MAX(b.expiry_date) as expiryDate,
+        MAX(b.batch_code) as batchNo,
+        CASE 
+          WHEN MAX(b.expiry_date) < date('now') AND MAX(b.expiry_date) IS NOT NULL THEN 'Expired'
+          WHEN COALESCE(SUM(b.quantity), 0) <= p.reorder_threshold THEN 'Low Stock'
+          WHEN COALESCE(SUM(b.quantity), 0) = 0 THEN 'Out of Stock'
+          ELSE 'In Stock'
+        END as status
+      FROM products p
+      LEFT JOIN categories c ON p.category_id = c.id
+      LEFT JOIN batches b ON p.id = b.product_id
+      WHERE p.is_active = 1
+      GROUP BY p.id
+      ORDER BY p.name
+    `);
+    return { success: true, data: stmt.all() };
+  } catch (error) {
+    console.error("Failed to get inventory items:", error);
+    return { success: false, message: error.message };
+  }
+});
+
+// Helper function to get or create category
+function getOrCreateCategory(categoryName) {
+  const getCategory = db.prepare("SELECT id FROM categories WHERE name = ?");
+  const existing = getCategory.get(categoryName);
+  
+  if (existing) {
+    return existing.id;
+  }
+  
+  const insertCategory = db.prepare("INSERT INTO categories (name) VALUES (?)");
+  const result = insertCategory.run(categoryName);
+  return result.lastInsertRowid;
+}
+
+// Create product handler
+ipcMain.handle("products:create", (_event, productData) => {
+  try {
+    console.log("Creating product in SQLite:", productData);
+    let categoryId = null;
+    if (productData.category) {
+      categoryId = getOrCreateCategory(productData.category);
+      console.log("Category ID:", categoryId);
+    }
+
+    const insertProduct = db.prepare(`
+      INSERT INTO products (
+        sku, barcode, name, description, category_id, supplier_id, unit_id,
+        purchase_price, selling_price, reorder_threshold, image_url, is_active
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+    `);
+    
+    const purchasePrice = productData.cost ?? productData.purchase_price ?? 0;
+    const sellingPrice = productData.price ?? productData.selling_price ?? 0;
+    const reorderThreshold = productData.minStock ?? productData.reorder_threshold ?? 0;
+    const imageUrl = productData.imageUrl || productData.image_url || null;
+    
+    console.log("Inserting product with:", {
+      name: productData.name,
+      purchasePrice,
+      sellingPrice,
+      reorderThreshold,
+      categoryId,
+      hasImage: !!imageUrl
+    });
+    
+    const productResult = insertProduct.run(
+      productData.sku || null,
+      productData.barcode || null,
+      productData.name,
+      productData.description || null,
+      categoryId,
+      productData.supplier_id || null,
+      productData.unit_id || null,
+      purchasePrice,
+      sellingPrice,
+      reorderThreshold,
+      imageUrl
+    );
+    
+    const productId = productResult.lastInsertRowid;
+    console.log("Product created with ID:", productId);
+
+    // Insert batch if quantity is provided (even if 0, we should still create a batch if stock is provided)
+    const stockQuantity = productData.stock ?? productData.quantity ?? 0;
+    if (stockQuantity > 0) {
+      const insertBatch = db.prepare(`
+        INSERT INTO batches (
+          product_id, batch_code, quantity, expiry_date, cost_per_unit, received_date
+        ) VALUES (?, ?, ?, ?, ?, datetime('now'))
+      `);
+      
+      const batchCode = productData.batchNo || productData.batch_code || null;
+      const expiryDate = productData.expiryDate || productData.expiry_date || null;
+      const costPerUnit = productData.cost ?? productData.purchase_price ?? purchasePrice;
+      
+      console.log("Inserting batch:", {
+        productId,
+        batchCode,
+        quantity: stockQuantity,
+        expiryDate,
+        costPerUnit
+      });
+      
+      insertBatch.run(
+        productId,
+        batchCode,
+        stockQuantity,
+        expiryDate,
+        costPerUnit
+      );
+      console.log("Batch created successfully");
+    } else {
+      console.log("No batch created - stock quantity is 0 or not provided");
+    }
+
+    console.log("Product creation completed successfully");
+    return { success: true, data: { id: productId } };
+  } catch (error) {
+    console.error("Failed to create product:", error);
+    return { success: false, message: error.message };
+  }
+});
+
+// Update product handler
+ipcMain.handle("products:update", (_event, productId, productData) => {
+  try {
+    console.log("Updating product in SQLite:", productId, productData);
+    let categoryId = null;
+    if (productData.category) {
+      categoryId = getOrCreateCategory(productData.category);
+    }
+
+    const updates = [];
+    const values = [];
+
+    if (productData.name !== undefined) {
+      updates.push("name = ?");
+      values.push(productData.name);
+    }
+    if (productData.sku !== undefined) {
+      updates.push("sku = ?");
+      values.push(productData.sku);
+    }
+    if (productData.barcode !== undefined) {
+      updates.push("barcode = ?");
+      values.push(productData.barcode);
+    }
+    if (productData.description !== undefined) {
+      updates.push("description = ?");
+      values.push(productData.description);
+    }
+    if (categoryId !== null) {
+      updates.push("category_id = ?");
+      values.push(categoryId);
+    }
+    if (productData.supplier_id !== undefined) {
+      updates.push("supplier_id = ?");
+      values.push(productData.supplier_id);
+    }
+    if (productData.unit_id !== undefined) {
+      updates.push("unit_id = ?");
+      values.push(productData.unit_id);
+    }
+    if (productData.cost !== undefined || productData.purchase_price !== undefined) {
+      updates.push("purchase_price = ?");
+      values.push(productData.cost ?? productData.purchase_price ?? 0);
+    }
+    if (productData.price !== undefined || productData.selling_price !== undefined) {
+      updates.push("selling_price = ?");
+      values.push(productData.price ?? productData.selling_price ?? 0);
+    }
+    if (productData.minStock !== undefined || productData.reorder_threshold !== undefined) {
+      updates.push("reorder_threshold = ?");
+      values.push(productData.minStock ?? productData.reorder_threshold ?? 0);
+    }
+    if (productData.imageUrl !== undefined || productData.image_url !== undefined) {
+      updates.push("image_url = ?");
+      values.push(productData.imageUrl ?? productData.image_url ?? null);
+    }
+    if (productData.is_active !== undefined) {
+      updates.push("is_active = ?");
+      values.push(productData.is_active);
+    }
+
+    if (updates.length === 0) {
+      return { success: true, data: { id: productId } };
+    }
+
+    values.push(productId);
+    const sql = `UPDATE products SET ${updates.join(", ")} WHERE id = ?`;
+    const stmt = db.prepare(sql);
+    stmt.run(...values);
+
+    console.log("Product updated successfully");
+    return { success: true, data: { id: productId } };
+  } catch (error) {
+    console.error("Failed to update product:", error);
+    return { success: false, message: error.message };
+  }
+});
+
+// Add batch to product handler
+ipcMain.handle("products:addBatch", (_event, productId, batchData) => {
+  try {
+    const insertBatch = db.prepare(`
+      INSERT INTO batches (
+        product_id, batch_code, quantity, expiry_date, cost_per_unit, received_date
+      ) VALUES (?, ?, ?, ?, ?, datetime('now'))
+    `);
+    
+    const result = insertBatch.run(
+      productId,
+      batchData.batchNo || batchData.batch_code || null,
+      batchData.stock ?? batchData.quantity ?? 0,
+      batchData.expiryDate || batchData.expiry_date || null,
+      batchData.cost ?? batchData.cost_per_unit ?? 0
+    );
+    
+    return { success: true, data: { id: result.lastInsertRowid } };
+  } catch (error) {
+    console.error("Failed to add batch:", error);
     return { success: false, message: error.message };
   }
 });

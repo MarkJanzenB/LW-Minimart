@@ -29,6 +29,10 @@ contextBridge.exposeInMainWorld("api", {
     getAll: () => ipcRenderer.invoke("products:getAll"),
     getByBarcode: (barcode: string) => ipcRenderer.invoke("products:getByBarcode", barcode),
     getInventory: () => ipcRenderer.invoke("products:getInventory"),
+    create: (productData: any) => ipcRenderer.invoke("products:create", productData),
+    update: (productId: number, productData: any) => ipcRenderer.invoke("products:update", productId, productData),
+    addBatch: (productId: number, batchData: any) => ipcRenderer.invoke("products:addBatch", productId, batchData),
+    delete: (productId: number) => ipcRenderer.invoke("products:delete", productId),
   },
   transactions: {
     getAll: (limit?: number, offset?: number) => ipcRenderer.invoke("transactions:getAll", limit, offset),
@@ -77,6 +81,10 @@ declare global {
         getAll(): Promise<{ success: boolean; data?: any[]; message?: string }>;
         getByBarcode(barcode: string): Promise<{ success: boolean; data?: any; message?: string }>;
         getInventory(): Promise<{ success: boolean; data?: any[]; message?: string }>;
+        create(productData: any): Promise<{ success: boolean; data?: any; message?: string }>;
+        update(productId: number, productData: any): Promise<{ success: boolean; data?: any; message?: string }>;
+        addBatch(productId: number, batchData: any): Promise<{ success: boolean; data?: any; message?: string }>;
+        delete(productId: number): Promise<{ success: boolean; message?: string }>;
       };
       transactions: {
         getAll(limit?: number, offset?: number): Promise<{ success: boolean; data?: any[]; message?: string }>;
