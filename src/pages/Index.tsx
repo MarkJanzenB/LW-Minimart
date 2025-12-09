@@ -77,6 +77,7 @@ const FeatureCard = ({ image, icon: Icon, title, description, iconBgColor, iconC
 const Index = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [scrollY, setScrollY] = useState(0);
   const [activeTab, setActiveTab] = useState("Inventory");
@@ -88,18 +89,34 @@ const Index = () => {
   });
 
   useEffect(() => {
-    const redirectIfLoggedIn = async () => {
+    const checkFirstLaunch = async () => {
       try {
+        // Check if user is already logged in, if so redirect to dashboard
         const { user } = await (window as any).api.auth.getCurrentUser();
         if (user) {
           navigate("/dashboard");
+          return;
+        }
+
+        // Check if this is the first launch
+        const hasLaunchedBefore = localStorage.getItem("lw-minimart-has-launched");
+        
+        if (!hasLaunchedBefore) {
+          // First launch - show landing page and mark as launched
+          localStorage.setItem("lw-minimart-has-launched", "true");
+          setIsLoading(false);
+        } else {
+          // Subsequent launches - redirect to login
+          navigate("/signin");
         }
       } catch (error) {
-        console.error("Error checking current user on landing:", error);
+        console.error("Error checking first launch:", error);
+        // On error, show landing page
+        setIsLoading(false);
       }
     };
 
-    redirectIfLoggedIn();
+    checkFirstLaunch();
   }, [navigate]);
 
   useEffect(() => {
@@ -148,18 +165,53 @@ const Index = () => {
 
   const handleGetStarted = async () => {
     try {
+      // Check if owner exists or if database is missing
       const { hasOwner } = await (window as any).api.auth.hasOwner();
+      
+      // If owner doesn't exist OR database is missing (error case), go to owner-setup
+      // Otherwise, go to login
       if (!hasOwner) {
         navigate("/owner-setup");
-        return;
+      } else {
+        navigate("/signin");
       }
-
-      navigate("/signin");
     } catch (error) {
+      // If there's an error (e.g., database missing), redirect to owner-setup
       console.error("Error handling get started:", error);
-      navigate("/signin");
+      navigate("/owner-setup");
     }
   };
+
+  const handleStartFreeTrial = async () => {
+    try {
+      // Check if owner exists or if database is missing
+      const { hasOwner } = await (window as any).api.auth.hasOwner();
+      
+      // If owner doesn't exist OR database is missing (error case), go to owner-setup
+      // Otherwise, go to login
+      if (!hasOwner) {
+        navigate("/owner-setup");
+      } else {
+        navigate("/signin");
+      }
+    } catch (error) {
+      // If there's an error (e.g., database missing), redirect to owner-setup
+      console.error("Error handling start free trial:", error);
+      navigate("/owner-setup");
+    }
+  };
+
+  // Show loading screen while checking authentication and redirecting
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="text-center space-y-4">
+          <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto"></div>
+          <p className="text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen overflow-hidden relative">
@@ -945,7 +997,7 @@ const Index = () => {
             <Button 
               size="lg"
               className="glass-card hover:glow-primary text-lg px-12 py-6 rounded-2xl text-foreground font-semibold"
-              onClick={() => navigate("/signin")}
+              onClick={handleStartFreeTrial}
             >
               <TrendingUp className="w-5 h-5" />
               Start Free Trial

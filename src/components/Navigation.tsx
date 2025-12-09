@@ -1,4 +1,4 @@
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Menu, X } from "lucide-react";
 import { useState } from "react";
@@ -9,8 +9,29 @@ import lwLogo from "@/assets/lw-logo.jpg";
 export const Navigation = () => {
   const [isOpen, setIsOpen] = useState(false);
   const location = useLocation();
+  const navigate = useNavigate();
 
   const isActive = (path: string) => location.pathname === path;
+
+  const handleGetStarted = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    try {
+      // Check if owner exists or if database is missing
+      const { hasOwner } = await (window as any).api.auth.hasOwner();
+      
+      // If owner doesn't exist OR database is missing (error case), go to owner-setup
+      // Otherwise, go to login
+      if (!hasOwner) {
+        navigate("/owner-setup");
+      } else {
+        navigate("/signin");
+      }
+    } catch (error) {
+      // If there's an error (e.g., database missing), redirect to owner-setup
+      console.error("Error handling get started:", error);
+      navigate("/owner-setup");
+    }
+  };
 
   const navLinks = [
     { path: "/", label: "Home" },
@@ -50,9 +71,7 @@ export const Navigation = () => {
           {/* Desktop Actions */}
           <div className="hidden md:flex items-center gap-2">
             <ThemeToggle />
-            <Link to="/signin">
-              <Button>Get Started</Button>
-            </Link>
+            <Button onClick={handleGetStarted}>Get Started</Button>
           </div>
 
           {/* Mobile Actions */}
@@ -85,9 +104,15 @@ export const Navigation = () => {
                 </Link>
               ))}
               <div className="pt-4">
-                <Link to="/signin" onClick={() => setIsOpen(false)}>
-                  <Button className="w-full">Get Started</Button>
-                </Link>
+                <Button 
+                  className="w-full" 
+                  onClick={(e) => {
+                    setIsOpen(false);
+                    handleGetStarted(e);
+                  }}
+                >
+                  Get Started
+                </Button>
               </div>
             </div>
           </div>
