@@ -82,35 +82,51 @@ export function CashflowChart() {
           />
           <Tooltip content={<CustomTooltip />} />
           <Legend 
-            wrapperStyle={{ paddingTop: '20px' }}
+            wrapperStyle={{ 
+              paddingTop: '20px',
+              display: 'flex',
+              justifyContent: 'center',
+              gap: '20px',
+              marginTop: '10px'
+            }}
             iconType="circle"
+            formatter={(value, entry: any, index) => {
+              let color = '';
+              switch (value) {
+                case 'Income': color = '#22c55e'; break;
+                case 'Expenses': color = '#ef4444'; break;
+                case 'Profit': color = '#3b82f6'; break;
+                default: color = '#000';
+              }
+              return <span style={{ color }}>{value}</span>;
+            }}
           />
           <Line 
             type="monotone" 
             dataKey="income" 
-            name="Income"
-            stroke="hsl(var(--chart-income))" 
+            name="Gross Income"
+            stroke="#3b82f6" // Blue
             strokeWidth={2.5}
-            dot={{ fill: 'hsl(var(--chart-income))', r: 4 }}
-            activeDot={{ r: 6 }}
+            dot={{ fill: '#3b82f6', r: 4 }}
+            activeDot={{ r: 6, stroke: '#3b82f6', strokeWidth: 2 }}
           />
           <Line 
             type="monotone" 
             dataKey="expenses" 
             name="Expenses"
-            stroke="hsl(var(--chart-expenses))" 
+            stroke="#ef4444" // Red
             strokeWidth={2.5}
-            dot={{ fill: 'hsl(var(--chart-expenses))', r: 4 }}
-            activeDot={{ r: 6 }}
+            dot={{ fill: '#ef4444', r: 4 }}
+            activeDot={{ r: 6, stroke: '#ef4444', strokeWidth: 2 }}
           />
           <Line 
             type="monotone" 
-            dataKey="profit" 
-            name="Profit"
-            stroke="hsl(var(--chart-profit))" 
+            dataKey="revenue" 
+            name="Revenue"
+            stroke="#22c55e" // Green
             strokeWidth={2.5}
-            dot={{ fill: 'hsl(var(--chart-profit))', r: 4 }}
-            activeDot={{ r: 6 }}
+            dot={{ fill: '#22c55e', r: 4 }}
+            activeDot={{ r: 6, stroke: '#22c55e', strokeWidth: 2 }}
           />
         </LineChart>
       </ResponsiveContainer>

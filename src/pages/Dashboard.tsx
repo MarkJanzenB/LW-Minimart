@@ -19,6 +19,22 @@ const Dashboard = () => {
     navigate("/inventory");
   };
 
+  const handlePosClick = () => {
+    navigate("/pos");
+  };
+
+  const handleSalesHistoryClick = () => {
+    navigate("/history/sales");
+  };
+
+  const handleRestockHistoryClick = () => {
+    navigate("/history/restock");
+  };
+
+  const handleReportsClick = () => {
+    navigate("/reports");
+  };
+
   // Fetch dashboard metrics from database
   useEffect(() => {
     const fetchMetrics = async () => {
@@ -51,13 +67,12 @@ const Dashboard = () => {
     { month: "Jun", sales: 0 },
   ];
 
-  // Inventory category breakdown from database
-  const inventoryData = metrics?.inventoryByCategory && metrics.inventoryByCategory.length > 0
-    ? metrics.inventoryByCategory.map((cat: any) => ({
-        category: cat.category,
-        value: cat.value || 0,
-      }))
-    : [];
+  // Inventory category breakdown - can be enhanced later with database query
+  // For now, show empty state if no data
+  const inventoryData = metrics?.inventory?.totalProducts > 0 ? [
+    // This would be populated from a database query for category breakdown
+    // Placeholder structure - will be replaced with real data when query is added
+  ] : [];
 
   const COLORS = ["#133020", "#FFB347", "#FFC370", "#133020"];
 
@@ -76,6 +91,8 @@ const Dashboard = () => {
     { day: "Sat", income: 0, expenses: 0, profit: 0 },
     { day: "Sun", income: 0, expenses: 0, profit: 0 },
   ];
+
+  const recentActivity = (metrics?.recentTransactions || []).slice(-5).reverse();
 
   return (
         <>
@@ -276,94 +293,85 @@ const Dashboard = () => {
           {/* Bottom Section */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Inventory Distribution */}
-            <Card className="border-2 lg:col-span-1">
+            <Card className="border-2 lg:col-span-2">
               <CardHeader>
-                <CardTitle className="text-lg font-semibold">Inventory by Category</CardTitle>
+                <CardTitle className="text-lg font-semibold">Quick Actions</CardTitle>
               </CardHeader>
               <CardContent>
-                {loading ? (
-                  <div className="flex items-center justify-center h-48">
-                    <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
-                  </div>
-                ) : inventoryData.length > 0 ? (
-                  <div className="flex flex-col items-center">
-                    <ResponsiveContainer width="100%" height={200}>
-                      <PieChart>
-                        <Pie
-                          data={inventoryData}
-                          cx="50%"
-                          cy="50%"
-                          innerRadius={0}
-                          outerRadius={80}
-                          fill="#133020"
-                          dataKey="value"
-                          label={false}
-                        >
-                          {inventoryData.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                          ))}
-                        </Pie>
-                        <Tooltip />
-                      </PieChart>
-                    </ResponsiveContainer>
-                    <div className="grid grid-cols-2 gap-3 mt-4 w-full">
-                      {inventoryData.map((item, index) => (
-                        <div key={item.category} className="flex items-center gap-2">
-                          <div 
-                            className="w-3 h-3 rounded-full" 
-                            style={{ backgroundColor: COLORS[index % COLORS.length] }}
-                          />
-                          <span className="text-sm text-muted-foreground">
-                            {item.category}: <span className="font-semibold text-foreground">{item.value}%</span>
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex flex-col items-center justify-center h-48 text-muted-foreground">
-                    <Package className="w-12 h-12 mb-4 opacity-50" />
-                    <p className="text-sm">No category data available</p>
-                    <p className="text-xs mt-1">Add products with categories to see breakdown</p>
-                  </div>
-                )}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <button
+                    type="button"
+                    onClick={handlePosClick}
+                    className="w-full rounded-lg border border-border bg-card px-3 py-4 text-left hover:bg-muted transition-colors flex flex-col gap-2"
+                  >
+                    <span className="text-xs text-muted-foreground">Sell</span>
+                    <span className="text-sm font-semibold">Open POS</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleProductsClick}
+                    className="w-full rounded-lg border border-border bg-card px-3 py-4 text-left hover:bg-muted transition-colors flex flex-col gap-2"
+                  >
+                    <span className="text-xs text-muted-foreground">Stock</span>
+                    <span className="text-sm font-semibold">Manage Inventory</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleRestockHistoryClick}
+                    className="w-full rounded-lg border border-border bg-card px-3 py-4 text-left hover:bg-muted transition-colors flex flex-col gap-2"
+                  >
+                    <span className="text-xs text-muted-foreground">Purchasing</span>
+                    <span className="text-sm font-semibold">Restock History</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleReportsClick}
+                    className="w-full rounded-lg border border-border bg-card px-3 py-4 text-left hover:bg-muted transition-colors flex flex-col gap-2"
+                  >
+                    <span className="text-xs text-muted-foreground">Insights</span>
+                    <span className="text-sm font-semibold">View Reports</span>
+                  </button>
+                </div>
               </CardContent>
             </Card>
 
-            {/* Top Products / Sales by Category */}
-            <Card className="border-2 lg:col-span-2">
+            {/* Top Products */}
+            <Card className="border-2 lg:col-span-1">
               <CardHeader>
-                <CardTitle className="text-lg font-semibold">Top Products</CardTitle>
-                <p className="text-sm text-muted-foreground">Best selling items</p>
+                <CardTitle className="text-lg font-semibold">Store Alerts</CardTitle>
               </CardHeader>
               <CardContent>
                 {loading ? (
-                  <div className="flex items-center justify-center h-48">
-                    <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
-                  </div>
+                  <p className="text-sm text-muted-foreground">Checking for alerts...</p>
                 ) : (
-                  <div className="space-y-4">
-                    {metrics?.topProducts && metrics.topProducts.length > 0 ? (
-                      metrics.topProducts.slice(0, 4).map((product: any, index: number) => (
-                        <div key={product.id || index} className="flex items-center justify-between p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors">
-                          <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded overflow-hidden bg-primary/20 flex items-center justify-center">
-                              <span className="text-xs font-bold">#{index + 1}</span>
-                            </div>
-                            <span className="font-medium">{product.name || `Product ${index + 1}`}</span>
-                          </div>
-                          <div className="text-right">
-                            <p className="font-semibold">{formatCurrency(product.total_sales || 0)}</p>
-                            <p className="text-xs text-muted-foreground">{product.quantity_sold || 0} sold</p>
-                          </div>
+                  <div className="space-y-3">
+                    {(metrics?.inventory?.lowStockCount || 0) > 0 && (
+                      <div className="flex items-start justify-between gap-3 p-3 rounded-lg bg-destructive/10 border border-destructive/40">
+                        <div>
+                          <p className="text-sm font-semibold text-destructive">Low / almost out-of-stock products</p>
+                          <p className="text-xs text-muted-foreground">
+                            {metrics.inventory.lowStockCount.toLocaleString()} items are at or below their reorder level.
+                          </p>
                         </div>
-                      ))
-                    ) : (
-                      <div className="flex flex-col items-center justify-center h-48 text-muted-foreground">
-                        <Package className="w-12 h-12 mb-4 opacity-50" />
-                        <p className="text-sm">No sales data available</p>
-                        <p className="text-xs mt-1">Start making sales to see top products here</p>
                       </div>
+                    )}
+
+                    {(metrics?.inventory?.expiringSoonCount || 0) > 0 && (
+                      <div className="flex items-start justify-between gap-3 p-3 rounded-lg bg-accent/10 border border-accent/40">
+                        <div>
+                          <p className="text-sm font-semibold text-accent">Products nearing expiry</p>
+                          <p className="text-xs text-muted-foreground">
+                            {metrics.inventory.expiringSoonCount.toLocaleString()} products expire within the next 7 days.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {(metrics?.inventory?.lowStockCount || 0) === 0 && (metrics?.inventory?.expiringSoonCount || 0) === 0 && (
+                      <p className="text-sm text-muted-foreground">No critical inventory alerts right now.</p>
                     )}
                   </div>
                 )}

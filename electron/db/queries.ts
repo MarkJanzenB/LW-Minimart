@@ -514,6 +514,20 @@ export function getDashboardMetrics() {
   const lowStockResult = lowStockStmt.all() as any[];
   const lowStockCount = lowStockResult.length;
 
+  // Get products nearing expiry (next 7 days)
+  const expiringSoonStmt = db.prepare(`
+    SELECT COUNT(DISTINCT p.id) as expiringSoonCount
+    FROM products p
+    LEFT JOIN batches b ON p.id = b.product_id
+    WHERE p.is_active = 1
+      AND b.expiry_date IS NOT NULL
+      AND b.expiry_date > date('now')
+      AND b.expiry_date <= date('now', '+7 days')
+      AND COALESCE(b.quantity, 0) > 0
+  `);
+  const expiringSoonRow = expiringSoonStmt.get() as any;
+  const expiringSoonCount = expiringSoonRow?.expiringSoonCount || 0;
+
   // Get recent transactions for chart data
   const recentTransactionsStmt = db.prepare(`
     SELECT 
@@ -582,6 +596,7 @@ export function getDashboardMetrics() {
       totalProducts: inventory?.totalProducts || 0,
       totalStock: inventory?.totalStock || 0,
       lowStockCount: lowStockCount || 0,
+      expiringSoonCount,
     },
     recentTransactions: recentTransactions || [],
     topProducts: topProducts || [],
