@@ -147,7 +147,6 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ total, onConfirm, onCance
                   />
                 </div>
               </div>
-            )}
 
             <div className="flex gap-4 mt-4 md:mt-auto">
                <button 

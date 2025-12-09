@@ -5,6 +5,7 @@ import { Outlet, useNavigate } from "react-router-dom";
 import { ModeToggle } from "@/components/ModeToggle";
 import { useTransactionStore } from "@/stores/transactionStore";
 
+
 const Layout = () => {
   const navigate = useNavigate();
   const setTransactions = useTransactionStore((state) => state.setTransactions);

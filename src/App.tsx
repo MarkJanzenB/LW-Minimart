@@ -7,6 +7,7 @@ import Index from "./pages/Index";
 import SignIn from "./pages/SignIn";
 import SignUp from "./pages/SignUp";
 import About from "./pages/About";
+import OwnerSetup from "./pages/OwnerSetup";
 import Dashboard from "./pages/Dashboard";
 import Reports from "./pages/Reports";
 import Settings from "./pages/Settings";
@@ -18,7 +19,6 @@ import Inventory from "./pages/Inventory";
 import SalesHistoryPage from "./pages/SalesHistoryPage";
 import RestockHistoryPage from "./pages/RestockHistoryPage";
 import SpoilageHistoryPage from "./pages/SpoilageHistoryPage";
-import OwnerSetup from "./pages/OwnerSetup";
 
 const queryClient = new QueryClient();
 

@@ -89,30 +89,34 @@ const Index = () => {
   });
 
   useEffect(() => {
-    const redirectOnLoad = async () => {
+    const checkFirstLaunch = async () => {
       try {
-        // First check if user is already logged in
+        // Check if user is already logged in, if so redirect to dashboard
         const { user } = await (window as any).api.auth.getCurrentUser();
         if (user) {
           navigate("/dashboard");
           return;
         }
 
-        // Check if owner account exists
-        const { hasOwner } = await (window as any).api.auth.hasOwner();
-        if (!hasOwner) {
-          navigate("/owner-setup");
+        // Check if this is the first launch
+        const hasLaunchedBefore = localStorage.getItem("lw-minimart-has-launched");
+
+        if (!hasLaunchedBefore) {
+          // First launch - show landing page and mark as launched
+          localStorage.setItem("lw-minimart-has-launched", "true");
+          setIsLoading(false);
         } else {
+          // Subsequent launches - redirect to login
           navigate("/signin");
         }
       } catch (error) {
-        console.error("Error during initial redirect:", error);
-        // Fallback to signin if there's an error
-        navigate("/signin");
+        console.error("Error checking first launch:", error);
+        // On error, show landing page
+        setIsLoading(false);
       }
     };
 
-    redirectOnLoad();
+    checkFirstLaunch();
   }, [navigate]);
 
   useEffect(() => {
@@ -161,16 +165,35 @@ const Index = () => {
 
   const handleGetStarted = async () => {
     try {
+      // Check if owner exists or if database is missing
+      const { hasOwner } = await (window as any).api.auth.hasOwner();
+      
+      // If owner doesn't exist OR database is missing (error case), go to owner-setup
+      // Otherwise, go to login
+      if (!hasOwner) {
+        navigate("/owner-setup");
+      } else {
+        navigate("/signin");
+      }
+    } catch (error) {
+      // If there's an error (e.g., database missing), redirect to owner-setup
+      console.error("Error handling get started:", error);
+      navigate("/owner-setup");
+    }
+  };
+
+  const handleStartFreeTrial = async () => {
+    try {
+      // Same logic as handleGetStarted
       const { hasOwner } = await (window as any).api.auth.hasOwner();
       if (!hasOwner) {
         navigate("/owner-setup");
-        return;
+      } else {
+        navigate("/signin");
       }
-
-      navigate("/signin");
     } catch (error) {
-      console.error("Error handling get started:", error);
-      navigate("/signin");
+      console.error("Error handling start free trial:", error);
+      navigate("/owner-setup");
     }
   };
 
@@ -970,7 +993,7 @@ const Index = () => {
             <Button 
               size="lg"
               className="glass-card hover:glow-primary text-lg px-12 py-6 rounded-2xl text-foreground font-semibold"
-              onClick={() => navigate("/signin")}
+              onClick={handleStartFreeTrial}
             >
               <TrendingUp className="w-5 h-5" />
               Start Free Trial

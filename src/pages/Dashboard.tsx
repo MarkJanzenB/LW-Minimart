@@ -1,4 +1,5 @@
 import { useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TrendingUp, TrendingDown, DollarSign, Package, ShoppingCart, Users, LayoutDashboard, ArrowRight } from "lucide-react";
@@ -11,38 +12,68 @@ const Dashboard = () => {
   const location = useLocation();
   const isCashflow = location.pathname === "/cashflow";
   const { currency } = useCurrency();
-  
+  const [metrics, setMetrics] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
   const handleProductsClick = () => {
-    navigate("/products");
+    navigate("/inventory");
   };
-  
-  // Sample data for charts
-  const salesData = [
-    { month: "Jan", sales: 4000 },
-    { month: "Feb", sales: 3000 },
-    { month: "Mar", sales: 5000 },
-    { month: "Apr", sales: 4500 },
-    { month: "May", sales: 6000 },
-    { month: "Jun", sales: 5500 },
+
+  // Fetch dashboard metrics from database
+  useEffect(() => {
+    const fetchMetrics = async () => {
+      try {
+        setLoading(true);
+        const response = await (window as any).api.dashboard.getMetrics();
+        if (response.success && response.data) {
+          setMetrics(response.data);
+        }
+      } catch (error) {
+        console.error('Failed to fetch dashboard metrics:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchMetrics();
+  }, []);
+
+  // Transform database data for charts
+  const salesData = metrics?.recentTransactions?.map((t: any, index: number) => ({
+    month: new Date(t.date).toLocaleDateString('en-US', { month: 'short' }),
+    sales: t.revenue || 0,
+  })) || [
+    { month: "Jan", sales: 0 },
+    { month: "Feb", sales: 0 },
+    { month: "Mar", sales: 0 },
+    { month: "Apr", sales: 0 },
+    { month: "May", sales: 0 },
+    { month: "Jun", sales: 0 },
   ];
 
-  const inventoryData = [
-    { category: "Electronics", value: 45 },
-    { category: "Food", value: 30 },
-    { category: "Clothing", value: 15 },
-    { category: "Other", value: 10 },
-  ];
+  // Inventory category breakdown - can be enhanced later with database query
+  // For now, show empty state if no data
+  const inventoryData = metrics?.inventory?.totalProducts > 0 ? [
+    // This would be populated from a database query for category breakdown
+    // Placeholder structure - will be replaced with real data when query is added
+  ] : [];
 
   const COLORS = ["#133020", "#FFB347", "#FFC370", "#133020"];
 
-  const revenueData = [
-    { day: "Mon", income: 2400, expenses: 1200, profit: 1200 },
-    { day: "Tue", income: 1398, expenses: 1000, profit: 398 },
-    { day: "Wed", income: 9800, expenses: 4500, profit: 5300 },
-    { day: "Thu", income: 3908, expenses: 2000, profit: 1908 },
-    { day: "Fri", income: 4800, expenses: 2200, profit: 2600 },
-    { day: "Sat", income: 3800, expenses: 1800, profit: 2000 },
-    { day: "Sun", income: 4300, expenses: 1900, profit: 2400 },
+  // Transform recent transactions to revenue data format
+  const revenueData = metrics?.recentTransactions?.map((t: any) => ({
+    day: new Date(t.date).toLocaleDateString('en-US', { weekday: 'short' }),
+    income: t.revenue || 0,
+    expenses: 0, // Expenses would need separate tracking
+    profit: t.revenue || 0,
+  })) || [
+    { day: "Mon", income: 0, expenses: 0, profit: 0 },
+    { day: "Tue", income: 0, expenses: 0, profit: 0 },
+    { day: "Wed", income: 0, expenses: 0, profit: 0 },
+    { day: "Thu", income: 0, expenses: 0, profit: 0 },
+    { day: "Fri", income: 0, expenses: 0, profit: 0 },
+    { day: "Sat", income: 0, expenses: 0, profit: 0 },
+    { day: "Sun", income: 0, expenses: 0, profit: 0 },
   ];
 
   return (
@@ -72,10 +103,14 @@ const Dashboard = () => {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm text-muted-foreground font-medium">Total Revenue</p>
-                    <h3 className="text-3xl font-bold mt-2 text-foreground">{formatCurrency(3605)} <span className="text-lg">/{currency.code.toLowerCase()}/m</span></h3>
+                    <h3 className="text-3xl font-bold mt-2 text-foreground">
+                      {loading ? '...' : formatCurrency(metrics?.revenue?.total || 0)}
+                    </h3>
                     <div className="flex items-center mt-2 text-primary">
                       <TrendingUp className="w-4 h-4 mr-1" />
-                      <span className="text-sm font-medium">+12.5% from last month</span>
+                      <span className="text-sm font-medium">
+                        Today: {formatCurrency(metrics?.revenue?.today || 0)}
+                      </span>
                     </div>
                   </div>
                   <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
@@ -90,11 +125,15 @@ const Dashboard = () => {
               <CardContent className="pt-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-muted-foreground font-medium">Total Orders</p>
-                    <h3 className="text-3xl font-bold mt-2 text-foreground">1,254</h3>
+                    <p className="text-sm text-muted-foreground font-medium">Total Transactions</p>
+                    <h3 className="text-3xl font-bold mt-2 text-foreground">
+                      {loading ? '...' : (metrics?.revenue?.transactions || 0).toLocaleString()}
+                    </h3>
                     <div className="flex items-center mt-2 text-primary">
                       <TrendingUp className="w-4 h-4 mr-1" />
-                      <span className="text-sm font-medium">+8.2% from last week</span>
+                      <span className="text-sm font-medium">
+                        Today: {metrics?.revenue?.todayTransactions || 0}
+                      </span>
                     </div>
                   </div>
                   <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
@@ -116,10 +155,14 @@ const Dashboard = () => {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm text-muted-foreground font-medium">Products in Stock</p>
-                    <h3 className="text-3xl font-bold mt-2 text-foreground">856</h3>
+                    <h3 className="text-3xl font-bold mt-2 text-foreground">
+                      {loading ? '...' : (metrics?.inventory?.totalStock || 0).toLocaleString()}
+                    </h3>
                     <div className="flex items-center mt-2 text-destructive">
                       <TrendingDown className="w-4 h-4 mr-1" />
-                      <span className="text-sm font-medium">-3.1% from last month</span>
+                      <span className="text-sm font-medium">
+                        {metrics?.inventory?.lowStockCount || 0} low stock items
+                      </span>
                     </div>
                   </div>
                   <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
