@@ -1,20 +1,15 @@
 import { useNavigate } from "react-router-dom";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { TrendingUp, TrendingDown, DollarSign, Package, ShoppingCart, Users, LayoutDashboard, ArrowRight } from "lucide-react";
+import { TrendingUp, TrendingDown, DollarSign, Package, ShoppingCart, Users, LayoutDashboard } from "lucide-react";
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from "recharts";
 import { useLocation } from "react-router-dom";
 import { formatCurrency, useCurrency } from "@/hooks/use-currency";
 
 const Dashboard = () => {
-  const navigate = useNavigate();
   const location = useLocation();
   const isCashflow = location.pathname === "/cashflow";
   const { currency } = useCurrency();
-
-  const handleProductsClick = () => {
-    navigate("/inventory");
-  };
   
   // Sample data for charts
   const salesData = [
@@ -184,7 +179,7 @@ const Dashboard = () => {
               </CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={360}>
-                  <LineChart data={revenueData} margin={{ top: 10, right: 24, left: 0, bottom: 0 }}>
+                  <LineChart data={financeData} margin={{ top: 10, right: 24, left: 0, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                     <XAxis dataKey="day" stroke="hsl(var(--muted-foreground))" />
                     <YAxis stroke="hsl(var(--muted-foreground))" />

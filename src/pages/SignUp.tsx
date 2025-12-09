@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -95,12 +96,15 @@ const SignUp = () => {
           <source src="/auth-background.mp4" type="video/mp4" />
         </video>
         
-        {/* Dark Overlay */}
-        <div className="absolute inset-0 bg-black/40"></div>
-        
-        {/* Logo at Bottom Left */}
-        <div className="absolute bottom-8 left-8 z-10">
-          <img src={logo} alt="LW Mini Mart" className="h-10" />
+        {/* Dark Overlay with Back Button */}
+        <div className="absolute inset-0 bg-black/40">
+          <Link
+            to="/"
+            className="absolute top-6 left-6 z-20 inline-flex items-center gap-2 rounded-full bg-white/90 px-4 py-2 text-sm font-medium text-foreground shadow-lg transition hover:bg-white dark:bg-foreground/80 dark:text-background dark:hover:bg-foreground"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back to landing
+          </Link>
         </div>
       </div>
 

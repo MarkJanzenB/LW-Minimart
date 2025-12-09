@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   Search,
   Plus,
@@ -17,11 +17,43 @@ import {
   LayoutGrid,
   List,
   Upload,
+  MoreHorizontal,
+  MoreVertical,
 } from "lucide-react";
 import { SidebarTrigger } from "@/components/ui/sidebar";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { dbService, Product } from "@/services/database";
+import { toast } from "sonner";
+import { AddProductDialog } from "@/components/AddProductDialog";
+import { EditProductDialog } from "@/components/EditProductDialog";
 
 // TypeScript Interface
 interface InventoryItem {
+  id: string;
+  name: string;
+  sku: string;
+  price: number;
+  stock: number;
+  minStock: number;
+  category: string;
+  expiryDate: string;
+  status: string;
+  batchNo: string;
+  barcode: string;
+  imageUrl?: string;
+}
+
+interface BatchInfo {
+  id: string;
+  batchNo: string;
+  expiryDate: string;
+  stock: number;
+  status: string;
+  barcode: string;
+}
+
+interface ProductWithBatches {
   id: string;
   name: string;
   price: number;
@@ -33,6 +65,7 @@ interface InventoryItem {
   batchNo: string;
   barcode: string;
   imageUrl?: string;
+  batches: BatchInfo[];
 }
 
 // Traffic Light Helper Functions
@@ -47,7 +80,7 @@ const isLowStock = (stock: number, minStock: number): boolean => {
   return stock > 0 && stock < minStock;
 };
 
-const getRowClassName = (item: InventoryItem): string => {
+const getRowClassName = (item: { expiryDate: string; stock: number; minStock: number }): string => {
   if (isExpired(item.expiryDate)) {
     return "row-expired"; // Red
   }
@@ -57,74 +90,414 @@ const getRowClassName = (item: InventoryItem): string => {
   return "";
 };
 
-// Sample data removed - now fetched from database
+// Initialize with empty array - will be populated from database
+const sampleInventoryData: InventoryItem[] = [
+  {
+    id: "INV004",
+    name: "Sample Item",
+    sku: "SKU-INV004",
+    price: 18.75,
+    stock: 234,
+    minStock: 30,
+    category: "Health",
+    expiryDate: "2026-03-10",
+    status: "In Stock",
+    batchNo: "BT-2024-004",
+    barcode: "8901234567893"
+  },
+  {
+    id: "INV005",
+    name: "Coconut Oil",
+    sku: "SKU-INV005",
+    price: 9.99,
+    stock: 5,
+    minStock: 15,
+    category: "Food",
+    expiryDate: "2025-12-01",
+    status: "Low Stock",
+    batchNo: "BT-2024-005",
+    barcode: "8901234567894",
+  },
+  {
+    id: "INV006",
+    name: "Protein Powder",
+    sku: "SKU-INV006",
+    price: 45.00,
+    stock: 67,
+    minStock: 20,
+    category: "Health",
+    expiryDate: "2025-09-25",
+    status: "In Stock",
+    batchNo: "BT-2024-006",
+    barcode: "8901234567895",
+  },
+  {
+    id: "INV007",
+    name: "Herbal Shampoo",
+    sku: "SKU-INV007",
+    price: 14.25,
+    stock: 3,
+    minStock: 10,
+    category: "Personal Care",
+    expiryDate: "2024-10-15",
+    status: "Expired",
+    batchNo: "BT-2024-007",
+    barcode: "8901234567896",
+  },
+  {
+    id: "INV008",
+    name: "Quinoa Seeds",
+    sku: "SKU-INV008",
+    price: 8.50,
+    stock: 189,
+    minStock: 25,
+    category: "Food",
+    expiryDate: "2026-01-20",
+    status: "In Stock",
+    batchNo: "BT-2024-008",
+    barcode: "8901234567897",
+  },
+  {
+    id: "INV009",
+    name: "Essential Oil Set",
+    sku: "SKU-INV009",
+    price: 29.99,
+    stock: 10,
+    minStock: 12,
+    category: "Personal Care",
+    expiryDate: "2025-07-30",
+    status: "Low Stock",
+    batchNo: "BT-2024-009",
+    barcode: "8901234567898",
+  },
+  {
+    id: "INV010",
+    name: "Matcha Powder",
+    sku: "SKU-INV010",
+    price: 22.00,
+    stock: 56,
+    minStock: 15,
+    category: "Beverages",
+    expiryDate: "2025-11-15",
+    status: "In Stock",
+    batchNo: "BT-2024-010",
+    barcode: "8901234567899",
+  },
+  {
+    id: "INV011",
+    name: "Honey Raw Organic",
+    sku: "SKU-INV011",
+    price: 16.50,
+    stock: 2,
+    minStock: 10,
+    category: "Food",
+    expiryDate: "2024-09-01",
+    status: "Expired",
+    batchNo: "BT-2024-011",
+    barcode: "8901234567900",
+  },
+  {
+    id: "INV012",
+    name: "Omega-3 Fish Oil",
+    sku: "SKU-INV012",
+    price: 28.99,
+    stock: 98,
+    minStock: 20,
+    category: "Health",
+    expiryDate: "2025-10-10",
+    status: "In Stock",
+    batchNo: "BT-2024-012",
+    barcode: "8901234567901",
+  },
+];
 
-type SortKey = keyof InventoryItem;
+// Get unique categories from inventory when available, otherwise from sample data
+const getCategories = (data: ProductWithBatches[]) => ["All", ...new Set(data.map((item) => item.category))];
+
+type SortKey = keyof ProductWithBatches;
 type SortDirection = "asc" | "desc";
 
 const Inventory = () => {
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState<InventoryItem | null>(null);
+  const [isAdminViewerOpen, setIsAdminViewerOpen] = useState(false);
+  const [adminMirror, setAdminMirror] = useState<InventoryItem[]>([]);
+  const [isRowDeleteOpen, setIsRowDeleteOpen] = useState(false);
+  const [rowToDelete, setRowToDelete] = useState<InventoryItem | null>(null);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [inventory, setInventory] = useState<InventoryItem[]>([]);
+  const [detailsProduct, setDetailsProduct] = useState<ProductWithBatches | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isOwner, setIsOwner] = useState(false);
+  const [isSpoilageDialogOpen, setIsSpoilageDialogOpen] = useState(false);
+  const [isProcessingSpoilage, setIsProcessingSpoilage] = useState(false);
+  const [spoilageSummary, setSpoilageSummary] = useState<{
+    products: number;
+    totalQuantity: number;
+    totalCost: number;
+  } | null>(null);
+  const [expiredProductsForSpoilage, setExpiredProductsForSpoilage] = useState<Product[]>([]);
+
+  // Fetch products from database on component mount
+  useEffect(() => {
+    const loadProducts = async () => {
+      try {
+        const products = await dbService.getProducts();
+        const activeProducts = products.filter((product) => !(product.status === 'Spoiled' && product.stock === 0));
+        // Map database products to InventoryItem format
+        const formattedProducts = activeProducts.map((product) => ({
+          id: product.id,
+          name: product.name,
+          sku: product.sku,
+          price: product.price,
+          stock: product.stock,
+          minStock: product.minStock,
+          category: product.category,
+          expiryDate: product.expiryDate,
+          status: product.status,
+          batchNo: product.batchNo,
+          barcode: product.barcode,
+          imageUrl: product.imageUrl,
+        }));
+        setInventory(formattedProducts);
+      } catch (error) {
+        console.error("Error loading products:", error);
+        toast.error("Failed to load products");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    loadProducts();
+  }, []);
+
+  useEffect(() => {
+    const checkRole = async () => {
+      try {
+        if (typeof window === 'undefined' || !window.api || !window.api.auth) return;
+        const result = await window.api.auth.getCurrentUser();
+        const role = result?.user?.role;
+        setIsOwner(role === 'owner');
+      } catch (error) {
+        console.error('Error checking current user role:', error);
+      }
+    };
+
+    void checkRole();
+  }, []);
+
+  const openRowDeleteDialog = (item: InventoryItem) => {
+    setRowToDelete(item);
+    setDeleteConfirmText("");
+    setIsRowDeleteOpen(true);
+  };
+
+  const handleConfirmRowDelete = async () => {
+    if (!rowToDelete) return;
+
+    try {
+      await dbService.deleteProduct(rowToDelete.id);
+
+      const api = window.api;
+      if (api && api.inventory) {
+        await api.inventory.delete(rowToDelete.id);
+      }
+
+      setInventory((prev) => prev.filter((item) => item.id !== rowToDelete.id));
+      await handleProductAdded();
+
+      toast.success(`Deleted product ${rowToDelete.name}`);
+      setIsRowDeleteOpen(false);
+      setRowToDelete(null);
+      setDeleteConfirmText("");
+    } catch (error) {
+      console.error("Error deleting product:", error);
+      toast.error("Failed to delete product");
+    }
+  };
+
+  const handleProductAdded = async () => {
+    try {
+      const products = await dbService.getProducts();
+      const activeProducts = products.filter((product) => !(product.status === 'Spoiled' && product.stock === 0));
+      const formattedProducts = activeProducts.map((product) => ({
+        id: product.id,
+        name: product.name,
+        sku: product.sku,
+        price: product.price,
+        stock: product.stock,
+        minStock: product.minStock,
+        category: product.category,
+        expiryDate: product.expiryDate,
+        status: product.status,
+        batchNo: product.batchNo,
+        barcode: product.barcode,
+        imageUrl: product.imageUrl,
+      }));
+      setInventory(formattedProducts);
+    } catch (error) {
+      console.error("Error refreshing products:", error);
+      toast.error("Failed to refresh products");
+    }
+  };
+
+  const handleProductUpdatedOrDeleted = async () => {
+    await handleProductAdded();
+  };
+
+  const openAdminViewer = async () => {
+    try {
+      const api = window.api;
+      if (!api || !api.inventory) {
+        toast.error("Admin data viewer is only available in the desktop app.");
+        return;
+      }
+
+      const products = await dbService.getProducts();
+      const nowIso = new Date().toISOString();
+      const normalized = products.map((product) => ({
+        ...product,
+        createdAt: product.createdAt ?? nowIso,
+        updatedAt: product.updatedAt ?? nowIso,
+      }));
+
+      await api.inventory.syncFromClient(normalized);
+      const mirror = await api.inventory.getMirror();
+      setAdminMirror(mirror as InventoryItem[]);
+      setIsAdminViewerOpen(true);
+    } catch (error) {
+      console.error("Error loading admin viewer:", error);
+      toast.error("Failed to load admin data viewer");
+    }
+  };
+
+  const handleAdminDelete = async (id: string) => {
+    try {
+      await dbService.deleteProduct(id);
+      await window.api.inventory.delete(id);
+      setAdminMirror(prev => prev.filter(item => item.id !== id));
+      await handleProductAdded();
+    } catch (error) {
+      console.error("Error deleting product from admin viewer:", error);
+      toast.error("Failed to delete product");
+    }
+  };
+
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [showLowStockOnly, setShowLowStockOnly] = useState(false);
-  const [isModalOpen, setIsModalOpen] = useState(false);
   const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
   const [isCategoryOpen, setIsCategoryOpen] = useState(false);
   const [sortKey, setSortKey] = useState<SortKey>("id");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
-  const [viewMode, setViewMode] = useState<'list' | 'card'>('list');
+  const [viewMode, setViewMode] = useState<"list" | "card">("list");
   const [currentPage, setCurrentPage] = useState(1);
   const [inventoryData, setInventoryData] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const itemsPerPage = 20;
 
-  // Fetch inventory from database
-  useEffect(() => {
-    const fetchInventory = async () => {
-      try {
-        setLoading(true);
-        const response = await (window as any).api.products.getInventory();
-        if (response.success && response.data) {
-          // Map database data to InventoryItem interface
-          const mappedData: InventoryItem[] = response.data.map((item: any) => ({
-            id: item.id.toString(),
-            name: item.name,
-            price: parseFloat(item.price) || 0,
-            stock: parseInt(item.stock) || 0,
-            minStock: parseInt(item.minStock) || 0,
-            category: item.category || 'Uncategorized',
-            expiryDate: item.expiryDate || '',
-            status: item.status || 'In Stock',
-            batchNo: item.batchNo || '',
-            barcode: item.barcode || '',
-          }));
-          setInventoryData(mappedData);
+  const baseData: InventoryItem[] = inventory.length > 0 ? inventory : sampleInventoryData;
+
+  const groupedData: ProductWithBatches[] = useMemo(() => {
+    const groups = new Map<string, InventoryItem[]>();
+
+    for (const item of baseData) {
+      const key = item.name;
+      const existing = groups.get(key) ?? [];
+      existing.push(item);
+      groups.set(key, existing);
+    }
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const result: ProductWithBatches[] = [];
+
+    for (const [, items] of groups) {
+      const first = items[0];
+      const totalStock = items.reduce((sum, it) => sum + it.stock, 0);
+      const minStock = items.reduce((min, it) => (min === null ? it.minStock : Math.min(min, it.minStock)), null as number | null) ?? 0;
+
+      let nearestExpiry = items[0].expiryDate;
+      for (const it of items) {
+        if (!nearestExpiry) {
+          nearestExpiry = it.expiryDate;
+          continue;
         }
-      } catch (error) {
-        console.error('Failed to fetch inventory:', error);
-      } finally {
-        setLoading(false);
+        if (it.expiryDate && new Date(it.expiryDate) < new Date(nearestExpiry)) {
+          nearestExpiry = it.expiryDate;
+        }
       }
-    };
 
-    fetchInventory();
-  }, []);
+      const isExpiredGroup = nearestExpiry ? new Date(nearestExpiry) < today : false;
+      const isLowStockGroup = totalStock > 0 && totalStock < minStock;
 
-  // Get unique categories from inventory data
-  const categories = useMemo(() => {
-    return ["All", ...new Set(inventoryData.map((item) => item.category))];
-  }, [inventoryData]);
+      let status = first.status;
+      if (totalStock === 0) {
+        status = "Out of Stock";
+      } else if (isExpiredGroup) {
+        status = "Expired";
+      } else if (isLowStockGroup) {
+        status = "Low Stock";
+      } else {
+        status = "In Stock";
+      }
+
+      let batchForDisplay = first.batchNo;
+      let barcodeForDisplay = first.barcode;
+      if (nearestExpiry) {
+        const match = items.find((it) => it.expiryDate === nearestExpiry) ?? first;
+        batchForDisplay = match.batchNo;
+        barcodeForDisplay = match.barcode;
+      }
+
+      const batches: BatchInfo[] = items.map((it) => ({
+        id: it.id,
+        batchNo: it.batchNo,
+        expiryDate: it.expiryDate,
+        stock: it.stock,
+        status: it.status,
+        barcode: it.barcode,
+      }));
+
+      result.push({
+        id: first.id,
+        name: first.name,
+        price: first.price,
+        stock: totalStock,
+        minStock,
+        category: first.category,
+        expiryDate: nearestExpiry,
+        status,
+        batchNo: batchForDisplay,
+        barcode: barcodeForDisplay,
+        imageUrl: first.imageUrl,
+        batches,
+      });
+    }
+
+    return result;
+  }, [baseData]);
+
+  const categories = getCategories(groupedData);
 
   // Calculate statistics
   const stats = useMemo(() => {
-    const lowStock = inventoryData.filter((item) => item.stock > 0 && item.stock <= item.minStock).length;
-    const inStock = inventoryData.filter((item) => item.status === "In Stock").length;
-    const expired = inventoryData.filter((item) => item.status === "Expired").length;
-    return { lowStock, inStock, expired };
-  }, [inventoryData]);
+    const lowStock = groupedData.filter((item) => item.stock > 0 && item.stock <= 10).length;
+    const inStock = groupedData.filter((item) => item.status === "In Stock").length;
+    const expired = groupedData.filter((item) => item.status === "Expired").length;
+    const outOfStock = groupedData.filter((item) => item.status === "Out of Stock").length;
+    return { lowStock, inStock, expired, outOfStock };
+  }, [groupedData]);
+
+  const hasOutOfStock = useMemo(
+    () => groupedData.some((item) => item.status === "Out of Stock"),
+    [groupedData]
+  );
 
   // Filter and sort data
   const filteredData = useMemo(() => {
-    let data = [...inventoryData];
+    let data = [...groupedData];
 
     // Search filter
     if (searchTerm) {
@@ -161,7 +534,7 @@ const Inventory = () => {
     });
 
     return data;
-  }, [inventoryData, searchTerm, selectedCategory, showLowStockOnly, sortKey, sortDirection]);
+  }, [searchTerm, selectedCategory, showLowStockOnly, sortKey, sortDirection, groupedData]);
 
   const paginatedData = useMemo(() => {
     const startIndex = (currentPage - 1) * itemsPerPage;
@@ -306,7 +679,7 @@ const Inventory = () => {
       </html>
     `;
 
-    const printWindow = window.open("", "_blank") as any;
+    const printWindow = window.open("", "_blank") as unknown as Window | null;
     if (printWindow) {
       printWindow.document.write(printContent);
       printWindow.document.close();
@@ -325,7 +698,66 @@ const Inventory = () => {
       case "In Stock":
         return <span className="badge-in-stock">{status}</span>;
       default:
-        return <span className="badge-in-stock">{status}</span>;
+        // Treat "Out of Stock" and any unknown status as neutral/gray.
+        return <span className="badge-neutral">{status}</span>;
+    }
+  };
+
+  const openSpoilageDialog = async () => {
+    try {
+      const products = await dbService.getProducts();
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      const expired = products.filter((product) => {
+        if (!product.expiryDate) return false;
+        const expiry = new Date(product.expiryDate);
+        return expiry < today && product.status !== "Spoiled";
+      });
+
+      if (expired.length === 0) {
+        toast.info("No expired products with remaining stock to move to spoilage.");
+        return;
+      }
+
+      const totalQuantity = expired.reduce((sum, p) => sum + p.stock, 0);
+      const totalCost = expired.reduce((sum, p) => sum + (p.cost ?? 0) * p.stock, 0);
+
+      setExpiredProductsForSpoilage(expired);
+      setSpoilageSummary({
+        products: expired.length,
+        totalQuantity,
+        totalCost,
+      });
+      setIsSpoilageDialogOpen(true);
+    } catch (error) {
+      console.error("Error preparing spoilage move:", error);
+      toast.error("Failed to prepare spoilage operation");
+    }
+  };
+
+  const handleConfirmSpoilageMove = async () => {
+    if (expiredProductsForSpoilage.length === 0) {
+      setIsSpoilageDialogOpen(false);
+      return;
+    }
+
+    try {
+      setIsProcessingSpoilage(true);
+      for (const product of expiredProductsForSpoilage) {
+        await dbService.moveProductToSpoilage(product, "Expired");
+      }
+
+      await handleProductAdded();
+      toast.success("Expired products moved to spoilage with expense records.");
+    } catch (error) {
+      console.error("Error moving products to spoilage:", error);
+      toast.error("Failed to move expired products to spoilage");
+    } finally {
+      setIsProcessingSpoilage(false);
+      setIsSpoilageDialogOpen(false);
+      setExpiredProductsForSpoilage([]);
+      setSpoilageSummary(null);
     }
   };
 
@@ -334,14 +766,36 @@ const Inventory = () => {
       <div className="max-w-7xl mx-auto">
         {/* Header Section */}
         <div className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-10">
-          <div className="px-8 py-6 flex items-center gap-4">
-            <SidebarTrigger />
-            <div>
-              <h1 className="text-3xl font-bold text-foreground">Inventory</h1>
-              <p className="text-muted-foreground mt-1">Track and manage your products.</p>
+          <div className="px-8 py-6 flex items-center gap-4 justify-between">
+            <div className="flex items-center gap-4">
+              <SidebarTrigger />
+              <div>
+                <h1 className="text-3xl font-bold text-foreground">Inventory</h1>
+                <p className="text-muted-foreground mt-1">Track and manage your products.</p>
+              </div>
             </div>
+            <button
+              type="button"
+              onClick={openAdminViewer}
+              className="p-2 rounded-full hover:bg-muted text-muted-foreground opacity-0 hover:opacity-100 focus:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background transition-opacity"
+              aria-label="Open admin data viewer"
+            >
+              <MoreHorizontal className="w-5 h-5" />
+            </button>
           </div>
         </div>
+
+        {isOwner && hasOutOfStock && (
+          <div className="mt-4 mb-6 glass-card border border-destructive/40 bg-destructive/5 px-4 py-3 flex items-start gap-3">
+            <AlertTriangle className="w-5 h-5 text-destructive mt-0.5" />
+            <div>
+              <p className="text-sm font-medium text-destructive">Some products are out of stock.</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                As the store owner, you may want to restock these items to avoid lost sales.
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
@@ -409,6 +863,31 @@ const Inventory = () => {
                 <span>Low Stock Only</span>
               </button>
 
+              {stats.expired > 0 && (
+                <Button
+                  type="button"
+                  variant="destructive"
+                  onClick={openSpoilageDialog}
+                  className="flex items-center gap-2"
+                >
+                  <AlertTriangle className="w-4 h-4" />
+                  <span>Move Expired to Spoilage</span>
+                </Button>
+              )}
+
+              <AddProductDialog
+                isOpen={isAddDialogOpen}
+                onClose={() => setIsAddDialogOpen(false)}
+                onProductAdded={handleProductAdded}
+              />
+              <EditProductDialog
+                isOpen={isEditDialogOpen}
+                product={selectedProduct as unknown as Product}
+                onClose={() => setIsEditDialogOpen(false)}
+                onProductUpdated={handleProductUpdatedOrDeleted}
+                onProductDeleted={handleProductUpdatedOrDeleted}
+              />
+
               {/* Export Button */}
               <div className="relative z-10">
                 <button
@@ -459,7 +938,7 @@ const Inventory = () => {
               </div>
 
               {/* Add Product Button */}
-              <button onClick={() => setIsModalOpen(true)} className="glass-button-primary flex items-center gap-2">
+              <button onClick={() => setIsAddDialogOpen(true)} className="glass-button-primary flex items-center gap-2">
                 <Plus className="w-5 h-5" />
                 <span>Add Product</span>
               </button>
@@ -491,20 +970,17 @@ const Inventory = () => {
               <thead>
                 <tr>
                   {[
-                    { key: "id", label: "ID" },
                     { key: "name", label: "Product" },
                     { key: "price", label: "Price" },
                     { key: "stock", label: "Stock" },
                     { key: "category", label: "Category" },
                     { key: "expiryDate", label: "Expiry" },
                     { key: "status", label: "Status" },
-                    { key: "batchNo", label: "Batch" },
-                    { key: "barcode", label: "Barcode" },
                   ].map((col, idx) => (
                     <th
                       key={col.key}
                       onClick={() => handleSort(col.key as SortKey)}
-                      className={`cursor-pointer hover:bg-muted transition-colors ${idx === 0 ? 'rounded-tl-xl' : ''} ${idx === 8 ? 'rounded-tr-xl' : ''}`}
+                      className={`cursor-pointer hover:bg-muted transition-colors ${idx === 0 ? 'rounded-tl-xl' : ''} ${idx === 5 ? 'rounded-tr-xl' : ''}`}
                     >
                       <div className="flex items-center gap-1.5">
                         {col.label}
@@ -516,17 +992,25 @@ const Inventory = () => {
                       </div>
                     </th>
                   ))}
+                  <th className="text-right">Actions</th>
                 </tr>
               </thead>
               <tbody>
-              {paginatedData.map((item, index) => (
+                {paginatedData.map((item, index) => (
                   <tr
                     key={item.id}
                     className={`${getRowClassName(item)}`}
                     style={{ animationDelay: `${index * 50}ms` }}
                   >
-                    <td className="font-mono text-xs text-muted-foreground">{item.id}</td>
-                    <td className="font-medium text-foreground">{item.name}</td>
+                    <td>
+                      <button
+                        type="button"
+                        className="font-medium text-foreground hover:underline text-left"
+                        onClick={() => setDetailsProduct(item)}
+                      >
+                        {item.name}
+                      </button>
+                    </td>
                     <td className="tabular-nums">${item.price.toFixed(2)}</td>
                     <td>
                       <span
@@ -544,8 +1028,38 @@ const Inventory = () => {
                     <td className="text-muted-foreground">{item.category}</td>
                     <td className="text-muted-foreground tabular-nums">{item.expiryDate}</td>
                     <td>{getStatusBadge(item.status)}</td>
-                    <td className="font-mono text-xs text-muted-foreground">{item.batchNo}</td>
-                    <td className="font-mono text-xs text-muted-foreground">{item.barcode}</td>
+                    <td className="text-right space-x-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        onClick={() => {
+                          // Use first batch's underlying item id to load full product from DB if needed
+                          const batch = item.batches[0];
+                          const source = inventory.find((p) => p.id === batch.id) ?? null;
+                          setSelectedProduct(source);
+                          setIsEditDialogOpen(true);
+                        }}
+                        aria-label={`Edit ${item.name}`}
+                      >
+                        <X className="hidden" />
+                        <span className="text-xs font-medium">Edit</span>
+                      </Button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const batch = item.batches[0];
+                          const source = inventory.find((p) => p.id === batch.id) ?? null;
+                          if (source) {
+                            openRowDeleteDialog(source);
+                          }
+                        }}
+                        className="p-1 rounded-full hover:bg-muted text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background"
+                        aria-label={`More actions for ${item.name}`}
+                      >
+                        <MoreVertical className="w-4 h-4" />
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -554,25 +1068,31 @@ const Inventory = () => {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 p-6">
               {paginatedData.map((item, index) => (
-                <div key={item.id} className={`glass-card p-4 flex flex-col ${getRowClassName(item)}`} style={{ animationDelay: `${index * 50}ms` }}>
-                  <div className="w-full h-40 bg-muted rounded-lg mb-4 flex items-center justify-center">
+                <div
+                  key={item.id}
+                  className={`glass-card p-4 flex flex-col ${getRowClassName(item)}`}
+                  style={{ animationDelay: `${index * 50}ms` }}
+                >
+                  <button
+                    type="button"
+                    className="w-full h-40 bg-muted rounded-lg mb-4 flex items-center justify-center overflow-hidden focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background"
+                    onClick={() => setDetailsProduct(item)}
+                  >
                     {item.imageUrl ? (
                       <img src={item.imageUrl} alt={item.name} className="w-full h-full object-cover rounded-lg" />
                     ) : (
                       <Package className="w-12 h-12 text-muted-foreground/40" />
                     )}
-                  </div>
-                  <h3 className="font-bold text-foreground mb-2">{item.name}</h3>
+                  </button>
+                  <h3 className="font-bold text-foreground mb-1">{item.name}</h3>
                   <p className="text-sm text-muted-foreground mb-2">{item.category}</p>
-                  <div className="flex justify-between items-center mb-2">
+                  <div className="flex justify-between items-center mb-1">
                     <span className="font-bold text-lg text-primary">${item.price.toFixed(2)}</span>
-                    <span className={`font-semibold ${isLowStock(item.stock, item.minStock) ? 'text-accent' : 'text-primary'}`}>{item.stock} in stock</span>
+                    <span className={`font-semibold ${isLowStock(item.stock, item.minStock) ? 'text-accent' : 'text-primary'}`}>
+                      {item.stock} in stock
+                    </span>
                   </div>
-                  <div className="text-xs text-muted-foreground">
-                    <p>Batch: {item.batchNo}</p>
-                    <p>Expiry: {item.expiryDate}</p>
-                    <p className="font-mono mt-1">{item.barcode}</p>
-                  </div>
+                  <p className="text-xs text-muted-foreground mb-2">Nearest expiry: {item.expiryDate}</p>
                   {getStatusBadge(item.status)}
                 </div>
               ))}
@@ -611,108 +1131,174 @@ const Inventory = () => {
           </div>
         </div>
       </div>
-
-      {/* Modal */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          {/* Backdrop */}
-          <div
-            className="absolute inset-0 bg-foreground/30 backdrop-blur-sm"
-            onClick={() => setIsModalOpen(false)}
-          />
-
-          {/* Modal Content */}
-          <div className="glass-modal relative w-full max-w-lg p-8 animate-scale-in">
-            <button
-              onClick={() => setIsModalOpen(false)}
-              className="absolute top-4 right-4 w-9 h-9 rounded-full bg-muted flex items-center justify-center hover:bg-muted/80 transition-colors"
-            >
-              <X className="w-4 h-4 text-muted-foreground" />
-            </button>
-
-            <div className="text-center mb-8">
-              <div className="w-14 h-14 rounded-xl bg-primary/15 flex items-center justify-center mx-auto mb-4">
-                <Plus className="w-7 h-7 text-primary" />
-              </div>
-              <h2 className="text-2xl font-display font-bold text-foreground">Add New Product</h2>
-              <p className="text-muted-foreground mt-2 text-sm">Fill in the product details below</p>
-            </div>
-
-            <form className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">Product Name</label>
-                  <input type="text" placeholder="Enter name" className="glass-input w-full" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">Price</label>
-                  <input type="number" placeholder="0.00" className="glass-input w-full" />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">Stock</label>
-                  <input type="number" placeholder="0" className="glass-input w-full" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">Category</label>
-                  <select className="glass-input w-full">
-                    {categories.filter((c) => c !== "All").map((cat) => (
-                      <option key={cat} value={cat}>
-                        {cat}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">Batch No.</label>
-                  <input type="text" placeholder="BT-XXXX-XXX" className="glass-input w-full" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">Expiry Date</label>
-                  <input type="date" className="glass-input w-full" />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">Product Image</label>
-                <div className="flex items-center justify-center w-full">
-                  <label htmlFor="dropzone-file" className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-lg cursor-pointer bg-muted/50 hover:bg-muted/80">
-                    <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                      <Upload className="w-8 h-8 mb-2 text-muted-foreground" />
-                      <p className="mb-2 text-sm text-muted-foreground"><span className="font-semibold">Click to upload</span> or drag and drop</p>
-                      <p className="text-xs text-muted-foreground">SVG, PNG, JPG or GIF (MAX. 800x400px)</p>
-                    </div>
-                    <input id="dropzone-file" type="file" className="hidden" />
-                  </label>
-                </div> 
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">Barcode</label>
-                <input type="text" placeholder="Enter barcode" className="glass-input w-full" />
-              </div>
-
-              <div className="flex gap-3 pt-4">
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="glass-button flex-1"
-                >
-                  Cancel
-                </button>
-                <button type="submit" className="glass-button-primary flex-1">
-                  Add Product
-                </button>
-              </div>
-            </form>
+      <Dialog open={isAdminViewerOpen} onOpenChange={(open) => setIsAdminViewerOpen(open)}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Admin Data Viewer</DialogTitle>
+          </DialogHeader>
+          <div className="overflow-x-auto mt-4">
+            <table className="modern-table">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Name</th>
+                  <th>SKU</th>
+                  <th>Price</th>
+                  <th>Stock</th>
+                  <th>Category</th>
+                  <th>Expiry</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {adminMirror.map((item) => (
+                  <tr key={item.id}>
+                    <td className="font-mono text-xs text-muted-foreground">{item.id}</td>
+                    <td>{item.name}</td>
+                    <td>{item.sku}</td>
+                    <td className="tabular-nums">${item.price.toFixed(2)}</td>
+                    <td className="tabular-nums">{item.stock}</td>
+                    <td>{item.category}</td>
+                    <td className="tabular-nums">{item.expiryDate}</td>
+                    <td>{item.status}</td>
+                    <td>
+                      <button
+                        type="button"
+                        className="text-destructive text-sm hover:underline"
+                        onClick={() => handleAdminDelete(item.id)}
+                      >
+                        Delete
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+                {adminMirror.length === 0 && (
+                  <tr>
+                    <td colSpan={9} className="text-center py-6 text-muted-foreground text-sm">
+                      No products in admin viewer.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
           </div>
-        </div>
-      )}
+        </DialogContent>
+      </Dialog>
+      <Dialog open={!!detailsProduct} onOpenChange={(open) => { if (!open) setDetailsProduct(null); }}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{detailsProduct?.name}</DialogTitle>
+          </DialogHeader>
+          {detailsProduct && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
+              <div className="flex items-center justify-center bg-muted rounded-lg min-h-[240px]">
+                {detailsProduct.imageUrl ? (
+                  <img
+                    src={detailsProduct.imageUrl}
+                    alt={detailsProduct.name}
+                    className="max-h-80 w-full object-contain rounded-lg"
+                  />
+                ) : (
+                  <Package className="w-16 h-16 text-muted-foreground/40" />
+                )}
+              </div>
+              <div className="space-y-4">
+                <div>
+                  <p className="text-sm text-muted-foreground">Category</p>
+                  <p className="font-medium">{detailsProduct.category}</p>
+                </div>
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <p className="text-muted-foreground">Total stock</p>
+                    <p className="font-semibold">{detailsProduct.stock}</p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">Nearest expiry</p>
+                    <p className="font-semibold">{detailsProduct.expiryDate}</p>
+                  </div>
+                </div>
+                <div className="mt-2">
+                  <p className="text-sm font-semibold mb-2">Batches</p>
+                  <div className="border rounded-lg overflow-hidden">
+                    <table className="w-full text-sm">
+                      <thead className="bg-muted">
+                        <tr>
+                          <th className="px-3 py-2 text-left">Batch No.</th>
+                          <th className="px-3 py-2 text-left">Expiry</th>
+                          <th className="px-3 py-2 text-right">Stock</th>
+                          <th className="px-3 py-2 text-left">Status</th>
+                          <th className="px-3 py-2 text-left">Barcode</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {detailsProduct.batches.map((batch) => (
+                          <tr key={batch.id} className="border-t">
+                            <td className="px-3 py-2 font-mono text-xs">{batch.batchNo}</td>
+                            <td className="px-3 py-2 text-xs">{batch.expiryDate}</td>
+                            <td className="px-3 py-2 text-right tabular-nums">{batch.stock}</td>
+                            <td className="px-3 py-2 text-xs">{batch.status}</td>
+                            <td className="px-3 py-2 font-mono text-xs">{batch.barcode}</td>
+                          </tr>
+                        ))}
+                        {detailsProduct.batches.length === 0 && (
+                          <tr>
+                            <td colSpan={5} className="px-3 py-4 text-center text-muted-foreground text-xs">
+                              No batch information available.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+      <Dialog open={isRowDeleteOpen} onOpenChange={(open) => setIsRowDeleteOpen(open)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete Product</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 mt-2">
+            <p className="text-sm text-muted-foreground">
+              This action cannot be undone. To confirm, type
+              {" "}
+              <span className="font-mono font-semibold">
+                #{rowToDelete?.name ?? "ProductName"}
+              </span>
+              {" "}
+              below.
+            </p>
+            <input
+              type="text"
+              value={deleteConfirmText}
+              onChange={(e) => setDeleteConfirmText(e.target.value)}
+              className="glass-input w-full"
+              placeholder={`#${rowToDelete?.name ?? "ProductName"}`}
+            />
+          </div>
+          <DialogFooter className="pt-4">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setIsRowDeleteOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={handleConfirmRowDelete}
+              disabled={!rowToDelete || deleteConfirmText !== `#${rowToDelete.name}`}
+            >
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

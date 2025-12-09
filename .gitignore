@@ -41,8 +41,5 @@ coverage/
 # System Files
 Thumbs.db
 
-# Database files (each team should have their own local database)
-electron/db/store.db
+# Database
 *.db
-*.db-shm
-*.db-wal

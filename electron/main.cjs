@@ -28,8 +28,33 @@ mkdirSync(dbDir, { recursive: true });
 const dbPath = join(dbDir, "store.db");
 const db = new Database(dbPath);
 
-db.pragma("journal_mode = WAL");
-db.pragma("foreign_keys = ON");
+db.exec(`
+  CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT UNIQUE,
+    password TEXT,
+    role TEXT CHECK(role IN ('owner','cashier'))
+  );
+
+  CREATE TABLE IF NOT EXISTS inventory_mirror (
+    id TEXT PRIMARY KEY,
+    name TEXT,
+    sku TEXT,
+    category TEXT,
+    supplier TEXT,
+    cost REAL,
+    price REAL,
+    stock INTEGER,
+    minStock INTEGER,
+    expiryDate TEXT,
+    status TEXT,
+    batchNo TEXT,
+    barcode TEXT,
+    imageUrl TEXT,
+    createdAt TEXT,
+    updatedAt TEXT
+  );
+`);
 
 // Apply schema from schema.sql file
 try {
@@ -128,10 +153,7 @@ function createWindow() {
   });
 
   if (isDev) {
-    // Use port from environment variable or default to 8080 (matching vite.config.ts)
-    const port = process.env.VITE_PORT || "8080";
-    const devUrl = `http://localhost:${port}`;
-    mainWindow.loadURL(devUrl);
+    mainWindow.loadURL("http://localhost:5173");
   } else {
     mainWindow.loadFile(join(__dirname, "..", "dist", "index.html"));
   }

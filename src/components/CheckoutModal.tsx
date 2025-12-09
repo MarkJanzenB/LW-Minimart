@@ -125,7 +125,7 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ total, onConfirm, onCance
                   />
                 </div>
               </div>
-            
+            )}
 
             {method === 'cash' && (
               <div

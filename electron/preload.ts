@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer } from "electron";
+import type { Product } from "../src/services/database";
 
 contextBridge.exposeInMainWorld("api", {
   auth: {
@@ -12,15 +13,11 @@ contextBridge.exposeInMainWorld("api", {
     initializeOwner: (username: string, password: string) =>
       ipcRenderer.invoke("auth:initializeOwner", { username, password }),
   },
-  products: {
-    getAll: () => ipcRenderer.invoke("products:getAll"),
-    getByBarcode: (barcode: string) => ipcRenderer.invoke("products:getByBarcode", barcode),
-    getInventory: () => ipcRenderer.invoke("products:getInventory"),
-  },
-  transactions: {
-    getAll: (limit?: number, offset?: number) => ipcRenderer.invoke("transactions:getAll", limit, offset),
-    getById: (transactionId: string) => ipcRenderer.invoke("transactions:getById", transactionId),
-    create: (transactionData: any) => ipcRenderer.invoke("transactions:create", transactionData),
+  inventory: {
+    syncFromClient: (products: Product[]) =>
+      ipcRenderer.invoke("inventory:syncFromClient", products),
+    getMirror: () => ipcRenderer.invoke('inventory:getMirror'),
+    delete: (id: string) => ipcRenderer.invoke('inventory:delete', id),
   },
 });
 
@@ -42,15 +39,10 @@ declare global {
           password: string
         ): Promise<{ success: boolean; message?: string }>;
       };
-      products: {
-        getAll(): Promise<{ success: boolean; data?: any[]; message?: string }>;
-        getByBarcode(barcode: string): Promise<{ success: boolean; data?: any; message?: string }>;
-        getInventory(): Promise<{ success: boolean; data?: any[]; message?: string }>;
-      };
-      transactions: {
-        getAll(limit?: number, offset?: number): Promise<{ success: boolean; data?: any[]; message?: string }>;
-        getById(transactionId: string): Promise<{ success: boolean; data?: any; message?: string }>;
-        create(transactionData: any): Promise<{ success: boolean; data?: any; message?: string }>;
+      inventory: {
+        syncFromClient(products: Product[]): Promise<void>;
+        getMirror(): Promise<Product[]>;
+        delete(id: string): Promise<void>;
       };
     };
   }

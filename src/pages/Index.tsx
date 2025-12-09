@@ -89,34 +89,30 @@ const Index = () => {
   });
 
   useEffect(() => {
-    const checkFirstLaunch = async () => {
+    const redirectOnLoad = async () => {
       try {
-        // Check if user is already logged in, if so redirect to dashboard
+        // First check if user is already logged in
         const { user } = await (window as any).api.auth.getCurrentUser();
         if (user) {
           navigate("/dashboard");
           return;
         }
 
-        // Check if this is the first launch
-        const hasLaunchedBefore = localStorage.getItem("lw-minimart-has-launched");
-        
-        if (!hasLaunchedBefore) {
-          // First launch - show landing page and mark as launched
-          localStorage.setItem("lw-minimart-has-launched", "true");
-          setIsLoading(false);
+        // Check if owner account exists
+        const { hasOwner } = await (window as any).api.auth.hasOwner();
+        if (!hasOwner) {
+          navigate("/owner-setup");
         } else {
-          // Subsequent launches - redirect to login
           navigate("/signin");
         }
       } catch (error) {
-        console.error("Error checking first launch:", error);
-        // On error, show landing page
-        setIsLoading(false);
+        console.error("Error during initial redirect:", error);
+        // Fallback to signin if there's an error
+        navigate("/signin");
       }
     };
 
-    checkFirstLaunch();
+    redirectOnLoad();
   }, [navigate]);
 
   useEffect(() => {
@@ -178,25 +174,6 @@ const Index = () => {
     } catch (error) {
       // If there's an error (e.g., database missing), redirect to owner-setup
       console.error("Error handling get started:", error);
-      navigate("/owner-setup");
-    }
-  };
-
-  const handleStartFreeTrial = async () => {
-    try {
-      // Check if owner exists or if database is missing
-      const { hasOwner } = await (window as any).api.auth.hasOwner();
-      
-      // If owner doesn't exist OR database is missing (error case), go to owner-setup
-      // Otherwise, go to login
-      if (!hasOwner) {
-        navigate("/owner-setup");
-      } else {
-        navigate("/signin");
-      }
-    } catch (error) {
-      // If there's an error (e.g., database missing), redirect to owner-setup
-      console.error("Error handling start free trial:", error);
       navigate("/owner-setup");
     }
   };

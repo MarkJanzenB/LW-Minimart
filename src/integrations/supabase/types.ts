@@ -160,9 +160,11 @@ export interface Product {
   code: string;
   price: number;
   stock: number;
+  stock_quantity?: number;
   category: string;
   image?: string;
   color?: string;
+  barcode?: string;
 }
 
 export interface CartItem extends Product {
@@ -178,7 +180,8 @@ export interface Transaction {
   total: number;
   cashReceived?: number;
   change?: number;
-  paymentMethod: 'cash' | 'card';
+  paymentMethod: 'cash' | 'qr';
+  referenceNumber?: string;
   status?: 'Completed' | 'Refunded';
 }
 

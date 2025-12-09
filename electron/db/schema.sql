@@ -80,34 +80,22 @@ CREATE TABLE IF NOT EXISTS low_stock_alerts (
                                   FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
 );
 
--- Transactions/Sales table
-CREATE TABLE IF NOT EXISTS transactions (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  transaction_id TEXT UNIQUE NOT NULL,
-  total_amount NUMERIC NOT NULL DEFAULT 0.00,
-  subtotal NUMERIC NOT NULL DEFAULT 0.00,
-  tax_amount NUMERIC NOT NULL DEFAULT 0.00,
-  payment_method TEXT CHECK(payment_method IN ('cash', 'card', 'mobile')) DEFAULT 'cash',
-  status TEXT CHECK(status IN ('Completed', 'Refunded', 'Cancelled')) DEFAULT 'Completed',
-  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-  created_by INTEGER,
-  FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+-- Mirror of frontend inventory products from IndexedDB
+CREATE TABLE IF NOT EXISTS inventory_mirror (
+  id TEXT PRIMARY KEY,
+  name TEXT,
+  sku TEXT,
+  category TEXT,
+  supplier TEXT,
+  cost REAL,
+  price REAL,
+  stock INTEGER,
+  minStock INTEGER,
+  expiryDate TEXT,
+  status TEXT,
+  batchNo TEXT,
+  barcode TEXT,
+  imageUrl TEXT,
+  createdAt TEXT,
+  updatedAt TEXT
 );
-
-CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(created_at);
-CREATE INDEX IF NOT EXISTS idx_transactions_status ON transactions(status);
-
--- Transaction items (line items for each transaction)
-CREATE TABLE IF NOT EXISTS transaction_items (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  transaction_id INTEGER NOT NULL,
-  product_id INTEGER NOT NULL,
-  quantity INTEGER NOT NULL DEFAULT 1,
-  unit_price NUMERIC NOT NULL DEFAULT 0.00,
-  subtotal NUMERIC NOT NULL DEFAULT 0.00,
-  FOREIGN KEY (transaction_id) REFERENCES transactions(id) ON DELETE CASCADE,
-  FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE RESTRICT
-);
-
-CREATE INDEX IF NOT EXISTS idx_transaction_items_transaction ON transaction_items(transaction_id);
-CREATE INDEX IF NOT EXISTS idx_transaction_items_product ON transaction_items(product_id);
