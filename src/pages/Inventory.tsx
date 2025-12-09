@@ -1020,6 +1020,7 @@ const Inventory = () => {
               <thead>
                 <tr>
                   <th>ID</th>
+                  <th>Image</th>
                   <th>Name</th>
                   <th>SKU</th>
                   <th>Price</th>
@@ -1034,6 +1035,17 @@ const Inventory = () => {
                 {adminMirror.map((item) => (
                   <tr key={item.id}>
                     <td className="font-mono text-xs text-muted-foreground">{item.id}</td>
+                    <td>
+                      {item.imageUrl ? (
+                        <img
+                          src={item.imageUrl}
+                          alt={item.name}
+                          className="w-10 h-10 object-cover rounded-md"
+                        />
+                      ) : (
+                        <Package className="w-6 h-6 text-muted-foreground/40 mx-auto" />
+                      )}
+                    </td>
                     <td>{item.name}</td>
                     <td>{item.sku}</td>
                     <td className="tabular-nums">${item.price.toFixed(2)}</td>

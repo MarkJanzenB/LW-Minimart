@@ -531,7 +531,7 @@ function PosPage() {
                 onClick={() => setIsScannerOpen(true)}
                 className="px-6 py-2 bg-card border border-border rounded-lg font-semibold text-muted-foreground flex items-center gap-2 hover:bg-muted transition-colors shadow-sm">
 
-                <Scan size={18} /> Scan
+                <Scan size={18} /> Scan Barcode
              </button>
            </div>
 
