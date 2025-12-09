@@ -51,12 +51,13 @@ const Dashboard = () => {
     { month: "Jun", sales: 0 },
   ];
 
-  // Inventory category breakdown - can be enhanced later with database query
-  // For now, show empty state if no data
-  const inventoryData = metrics?.inventory?.totalProducts > 0 ? [
-    // This would be populated from a database query for category breakdown
-    // Placeholder structure - will be replaced with real data when query is added
-  ] : [];
+  // Inventory category breakdown from database
+  const inventoryData = metrics?.inventoryByCategory && metrics.inventoryByCategory.length > 0
+    ? metrics.inventoryByCategory.map((cat: any) => ({
+        category: cat.category,
+        value: cat.value || 0,
+      }))
+    : [];
 
   const COLORS = ["#133020", "#FFB347", "#FFC370", "#133020"];
 
@@ -280,103 +281,92 @@ const Dashboard = () => {
                 <CardTitle className="text-lg font-semibold">Inventory by Category</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="flex flex-col items-center">
-                  <ResponsiveContainer width="100%" height={200}>
-                    <PieChart>
-                      <Pie
-                        data={inventoryData}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={0}
-                        outerRadius={80}
-                        fill="#133020"
-                        dataKey="value"
-                        label={false}
-                      >
-                        {inventoryData.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip />
-                    </PieChart>
-                  </ResponsiveContainer>
-                  <div className="grid grid-cols-2 gap-3 mt-4 w-full">
-                    {inventoryData.map((item, index) => (
-                      <div key={item.category} className="flex items-center gap-2">
-                        <div 
-                          className="w-3 h-3 rounded-full" 
-                          style={{ backgroundColor: COLORS[index % COLORS.length] }}
-                        />
-                        <span className="text-sm text-muted-foreground">
-                          {item.category}: <span className="font-semibold text-foreground">{item.value}%</span>
-                        </span>
-                      </div>
-                    ))}
+                {loading ? (
+                  <div className="flex items-center justify-center h-48">
+                    <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
                   </div>
-                </div>
+                ) : inventoryData.length > 0 ? (
+                  <div className="flex flex-col items-center">
+                    <ResponsiveContainer width="100%" height={200}>
+                      <PieChart>
+                        <Pie
+                          data={inventoryData}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={0}
+                          outerRadius={80}
+                          fill="#133020"
+                          dataKey="value"
+                          label={false}
+                        >
+                          {inventoryData.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                          ))}
+                        </Pie>
+                        <Tooltip />
+                      </PieChart>
+                    </ResponsiveContainer>
+                    <div className="grid grid-cols-2 gap-3 mt-4 w-full">
+                      {inventoryData.map((item, index) => (
+                        <div key={item.category} className="flex items-center gap-2">
+                          <div 
+                            className="w-3 h-3 rounded-full" 
+                            style={{ backgroundColor: COLORS[index % COLORS.length] }}
+                          />
+                          <span className="text-sm text-muted-foreground">
+                            {item.category}: <span className="font-semibold text-foreground">{item.value}%</span>
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-48 text-muted-foreground">
+                    <Package className="w-12 h-12 mb-4 opacity-50" />
+                    <p className="text-sm">No category data available</p>
+                    <p className="text-xs mt-1">Add products with categories to see breakdown</p>
+                  </div>
+                )}
               </CardContent>
             </Card>
 
-            {/* Top Products */}
+            {/* Top Products / Sales by Category */}
             <Card className="border-2 lg:col-span-2">
               <CardHeader>
-                <CardTitle className="text-lg font-semibold">Sales by Region</CardTitle>
-                <p className="text-sm text-muted-foreground">Top performing regions</p>
+                <CardTitle className="text-lg font-semibold">Top Products</CardTitle>
+                <p className="text-sm text-muted-foreground">Best selling items</p>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-6 rounded overflow-hidden bg-primary/20 flex items-center justify-center">
-                        <span className="text-xs font-bold">US</span>
-                      </div>
-                      <span className="font-medium">United States</span>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-semibold">{formatCurrency(12584)}</p>
-                      <p className="text-xs text-muted-foreground">+18%</p>
-                    </div>
+                {loading ? (
+                  <div className="flex items-center justify-center h-48">
+                    <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
                   </div>
-                  
-                  <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-6 rounded overflow-hidden bg-primary/20 flex items-center justify-center">
-                        <span className="text-xs font-bold">UK</span>
+                ) : (
+                  <div className="space-y-4">
+                    {metrics?.topProducts && metrics.topProducts.length > 0 ? (
+                      metrics.topProducts.slice(0, 4).map((product: any, index: number) => (
+                        <div key={product.id || index} className="flex items-center justify-between p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded overflow-hidden bg-primary/20 flex items-center justify-center">
+                              <span className="text-xs font-bold">#{index + 1}</span>
+                            </div>
+                            <span className="font-medium">{product.name || `Product ${index + 1}`}</span>
+                          </div>
+                          <div className="text-right">
+                            <p className="font-semibold">{formatCurrency(product.total_sales || 0)}</p>
+                            <p className="text-xs text-muted-foreground">{product.quantity_sold || 0} sold</p>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="flex flex-col items-center justify-center h-48 text-muted-foreground">
+                        <Package className="w-12 h-12 mb-4 opacity-50" />
+                        <p className="text-sm">No sales data available</p>
+                        <p className="text-xs mt-1">Start making sales to see top products here</p>
                       </div>
-                      <span className="font-medium">United Kingdom</span>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-semibold">{formatCurrency(8942)}</p>
-                      <p className="text-xs text-muted-foreground">+12%</p>
-                    </div>
+                    )}
                   </div>
-                  
-                  <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-6 rounded overflow-hidden bg-primary/20 flex items-center justify-center">
-                        <span className="text-xs font-bold">CA</span>
-                      </div>
-                      <span className="font-medium">Canada</span>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-semibold">{formatCurrency(6731)}</p>
-                      <p className="text-xs text-muted-foreground">+9%</p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-6 rounded overflow-hidden bg-primary/20 flex items-center justify-center">
-                        <span className="text-xs font-bold">AU</span>
-                      </div>
-                      <span className="font-medium">Australia</span>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-semibold">{formatCurrency(5289)}</p>
-                      <p className="text-xs text-muted-foreground">+7%</p>
-                    </div>
-                  </div>
-                </div>
+                )}
               </CardContent>
             </Card>
           </div>

@@ -19,6 +19,7 @@ import Inventory from "./pages/Inventory";
 import SalesHistoryPage from "./pages/SalesHistoryPage";
 import RestockHistoryPage from "./pages/RestockHistoryPage";
 import SpoilageHistoryPage from "./pages/SpoilageHistoryPage";
+import Developers from "./pages/Developers";
 
 const queryClient = new QueryClient();
 
@@ -34,6 +35,7 @@ const App = () => (
           <Route path="/signup" element={<SignUp />} />
           <Route path="/owner-setup" element={<OwnerSetup />} />
           <Route path="/about" element={<About />} />
+          <Route path="/developers" element={<Developers />} />
           <Route element={<Layout />}>
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/pos" element={<PosPage />} />
