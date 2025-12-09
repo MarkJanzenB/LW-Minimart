@@ -98,4 +98,22 @@ CREATE TABLE IF NOT EXISTS inventory_mirror (
   imageUrl TEXT,
   createdAt TEXT,
   updatedAt TEXT
+CREATE TABLE IF NOT EXISTS sales (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    transaction_date TEXT DEFAULT CURRENT_TIMESTAMP,
+    total_amount REAL NOT NULL,
+    payment_method TEXT NOT NULL,
+    cash_received REAL,
+    change REAL,
+    reference_number TEXT
+);
+
+CREATE TABLE sale_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    sale_id INTEGER NOT NULL,
+    product_id INTEGER NOT NULL,
+    quantity INTEGER NOT NULL,
+    price REAL NOT NULL,
+    FOREIGN KEY (sale_id) REFERENCES sales(id) ON DELETE CASCADE,
+    FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE RESTRICT
 );

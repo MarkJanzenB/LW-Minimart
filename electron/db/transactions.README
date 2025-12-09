@@ -1,0 +1,4 @@
+Internal note: transactions are currently persisted to SQLite via recordSale() in electron/db/queries.ts.
+Renderer calls window.api.db.recordSale(transaction) through Electron preload IPC.
+Transaction history UI is driven by the Zustand store in src/stores/transactionStore.ts, which is updated at the same time as the DB.
+Future work: add IPC + queries to read sales back into the store on app start.

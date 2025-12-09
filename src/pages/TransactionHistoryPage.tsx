@@ -1,13 +1,11 @@
-import React, { useState, useMemo, useEffect } from 'react';
-import { Calendar, Search, SlidersHorizontal, Receipt } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { Calendar, Search, Receipt } from 'lucide-react';
 import { SidebarTrigger } from '@/components/ui/sidebar';
-import { Transaction } from '@/integrations/supabase/types';
 import { useTransactionStore } from '@/stores/transactionStore';
 import { formatCurrency } from '@/hooks/use-currency';
 
 function TransactionHistoryPage() {
   const transactions = useTransactionStore((state) => state.transactions);
-  const refundInStore = useTransactionStore((state) => state.refundTransaction);
   const [searchTerm, setSearchTerm] = useState('');
   const [sortOrder, setSortOrder] = useState('desc');
 
@@ -24,10 +22,6 @@ function TransactionHistoryPage() {
         return sortOrder === 'asc' ? dateA - dateB : dateB - dateA;
       });
   }, [transactions, searchTerm, sortOrder]);
-
-  const handleRefund = (transactionId: string) => {
-    refundInStore(transactionId);
-  };
 
   return (
     <>
@@ -83,8 +77,6 @@ function TransactionHistoryPage() {
               <th className="p-4 font-medium">Date</th>
               <th className="p-4 font-medium">Items</th>
               <th className="p-4 font-medium text-right">Total</th>
-              <th className="p-4 font-medium">Status</th>
-              <th className="p-4 font-medium"></th>
             </tr>
           </thead>
           <tbody>
@@ -100,21 +92,6 @@ function TransactionHistoryPage() {
                 <td className="p-4 text-muted-foreground">{new Date(t.date).toLocaleString()}</td>
                 <td className="p-4 text-muted-foreground">{t.items.reduce((sum, i) => sum + i.quantity, 0)}</td>
                 <td className="p-4 font-semibold text-right">{formatCurrency(t.total)}</td>
-                <td className="p-4">
-                  <span className={`px-2 py-1 text-xs rounded-full font-medium ${t.status === 'Refunded' ? 'bg-orange-100 text-orange-700' : 'bg-green-100 text-green-700'}`}>
-                    {t.status || 'Completed'}
-                  </span>
-                </td>
-                <td className="p-4 text-right">
-                  {t.status !== 'Refunded' && (
-                    <button 
-                      onClick={() => handleRefund(t.id)}
-                      className="px-3 py-1 border border-border rounded-md text-xs font-medium hover:bg-muted/80 bg-muted"
-                    >
-                      Refund
-                    </button>
-                  )}
-                </td>
               </tr>
             ))}
           </tbody>

@@ -18,6 +18,11 @@ contextBridge.exposeInMainWorld("api", {
       ipcRenderer.invoke("inventory:syncFromClient", products),
     getMirror: () => ipcRenderer.invoke('inventory:getMirror'),
     delete: (id: string) => ipcRenderer.invoke('inventory:delete', id),
+  db: {
+    recordSale: (transaction: unknown) =>
+      ipcRenderer.invoke("db:recordSale", transaction),
+    getSalesWithItems: () =>
+      ipcRenderer.invoke("db:getSalesWithItems"),
   },
 });
 
@@ -43,6 +48,15 @@ declare global {
         syncFromClient(products: Product[]): Promise<void>;
         getMirror(): Promise<Product[]>;
         delete(id: string): Promise<void>;
+      db: {
+        recordSale(
+          transaction: unknown
+        ): Promise<{ success: boolean; data?: { saleId: number }; message?: string }>;
+        getSalesWithItems(): Promise<{
+          success: boolean;
+          data?: any[];
+          message?: string;
+        }>;
       };
     };
   }

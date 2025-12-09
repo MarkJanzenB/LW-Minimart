@@ -151,6 +151,6 @@ export const MOCK_TRANSACTIONS: Transaction[] = [
     tax: 1.08,
     total: 10.05,
     paymentMethod: 'cash',
-    status: 'Refunded',
+    status: 'Completed',
   },
 ];

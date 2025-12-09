@@ -17,5 +17,8 @@ contextBridge.exposeInMainWorld("api", {
       ipcRenderer.invoke("inventory:syncFromClient", products),
     getMirror: () => ipcRenderer.invoke("inventory:getMirror"),
     delete: (id) => ipcRenderer.invoke("inventory:delete", id),
+  db: {
+    recordSale: (transaction) => ipcRenderer.invoke("db:recordSale", transaction),
+    getSalesWithItems: () => ipcRenderer.invoke("db:getSalesWithItems"),
   },
 });

@@ -101,7 +101,7 @@ function PosPage() {
     if (cart.length > 0) setView('checkout');
   };
 
-  const finalizeTransaction = (amountReceived: number, method: 'cash' | 'qr', referenceNumber?: string) => {
+  const finalizeTransaction = async (amountReceived: number, method: 'cash' | 'qr', referenceNumber?: string) => {
     const newTransaction: Transaction = {
       id: Date.now().toString(),
       date: new Date(),
@@ -119,6 +119,15 @@ function PosPage() {
     setView('receipt');
     setCart([]);
     playKaChing();
+
+    // Persist to SQLite via Electron backend when available
+    try {
+      if (window.api && (window as any).api.db?.recordSale) {
+        await (window as any).api.db.recordSale(newTransaction);
+      }
+    } catch (error) {
+      console.error('Failed to persist sale to SQLite', error);
+    }
   };
 
   // Sound Effects

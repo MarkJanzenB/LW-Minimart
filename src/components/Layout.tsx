@@ -3,26 +3,35 @@ import { AppSidebar } from "@/components/AppSidebar";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { Outlet, useNavigate } from "react-router-dom";
 import { ModeToggle } from "@/components/ModeToggle";
+import { useTransactionStore } from "@/stores/transactionStore";
 
 const Layout = () => {
   const navigate = useNavigate();
+  const setTransactions = useTransactionStore((state) => state.setTransactions);
 
   useEffect(() => {
-    const ensureOwnerExists = async () => {
+    const initialize = async () => {
       try {
         if (typeof window !== 'undefined' && (window as any).api?.auth) {
           const { hasOwner } = await (window as any).api.auth.hasOwner();
           if (!hasOwner) {
             navigate("/owner-setup");
+            return;
+          }
+        }
+        if (typeof window !== 'undefined' && (window as any).api?.db?.getSalesWithItems) {
+          const response = await (window as any).api.db.getSalesWithItems();
+          if (response && response.success && Array.isArray(response.data)) {
+            setTransactions(response.data);
           }
         }
       } catch (error) {
-        console.error("Error checking owner existence in layout:", error);
+        console.error("Error initializing layout:", error);
       }
     };
 
-    ensureOwnerExists();
-  }, [navigate]);
+    initialize();
+  }, [navigate, setTransactions]);
 
   return (
     <SidebarProvider>
