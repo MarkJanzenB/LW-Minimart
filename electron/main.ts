@@ -48,6 +48,9 @@ registerDbIpc();
 const isDev = process.env.ELECTRON_DEV === "true";
 
 function createWindow() {
+  console.log('Creating browser window...');
+  console.log('Is dev mode:', isDev);
+  
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 800,
@@ -56,16 +59,24 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      webSecurity: false, // For development only
     },
     show: false,
   });
+  
+  // Open dev tools for debugging
+  mainWindow.webContents.openDevTools();
 
   mainWindow.once("ready-to-show", () => {
     mainWindow?.show();
   });
 
   if (isDev) {
-    mainWindow.loadURL("http://localhost:8080");
+    const devUrl = "http://localhost:5173";
+    console.log('Loading URL:', devUrl);
+    mainWindow.loadURL(devUrl).catch(err => {
+      console.error('Failed to load URL:', err);
+    });
   } else {
     mainWindow.loadFile(join(__dirname, "..", "dist", "index.html"));
   }
