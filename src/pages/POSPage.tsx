@@ -3,7 +3,7 @@ import { Search, Scan, ShoppingCart, Wallet } from 'lucide-react';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 
 import { Product, CartItem, Transaction, ViewState } from '@/integrations/supabase/types'; 
-import { MOCK_PRODUCTS, TAX_RATE } from '@/constants';
+import { TAX_RATE } from '@/constants';
 import ProductCard from '@/components/ProductCard';
 import CartItemComponent from '@/components/CartItem';
 import CheckoutModal from '@/components/CheckoutModal';
@@ -15,16 +15,80 @@ function PosPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [transaction, setTransaction] = useState<Transaction | null>(null);
   const [selectedCartItemIndex, setSelectedCartItemIndex] = useState<number | null>(null);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
   
   const searchInputRef = useRef<HTMLInputElement>(null);
 
-  const filteredProducts = useMemo(() => {
-    const query = searchQuery.toLowerCase();
-    return MOCK_PRODUCTS.filter(p => 
-      p.name.toLowerCase().includes(query) || 
-      p.code.toLowerCase().includes(query)
-    );
+  // Fetch products from database
+  useEffect(() => {
+    const fetchProducts = async () => {
+      try {
+        setLoading(true);
+        const response = await (window as any).api.products.getAll();
+        if (response.success && response.data) {
+          // Map database products to Product interface
+          const mappedProducts: Product[] = response.data.map((p: any) => ({
+            id: p.id.toString(),
+            name: p.name,
+            code: p.sku || p.barcode || `PROD-${p.id}`,
+            price: parseFloat(p.price) || 0,
+            stock: parseInt(p.stock) || 0,
+            category: p.category || 'Uncategorized',
+            color: undefined, // Can be added later if needed
+          }));
+          setProducts(mappedProducts);
+        }
+      } catch (error) {
+        console.error('Failed to fetch products:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchProducts();
+  }, []);
+
+  // Handle barcode scanning/search
+  useEffect(() => {
+    if (searchQuery.length >= 8) { // Barcode length is typically 8+ digits
+      const handleBarcodeSearch = async () => {
+        try {
+          const response = await (window as any).api.products.getByBarcode(searchQuery);
+          if (response.success && response.data) {
+            const product = response.data;
+            const mappedProduct: Product = {
+              id: product.id.toString(),
+              name: product.name,
+              code: product.sku || product.barcode || `PROD-${product.id}`,
+              price: parseFloat(product.price) || 0,
+              stock: parseInt(product.stock) || 0,
+              category: product.category || 'Uncategorized',
+            };
+            addToCart(mappedProduct);
+            setSearchQuery('');
+          }
+        } catch (error) {
+          console.error('Failed to search by barcode:', error);
+        }
+      };
+      
+      // Debounce barcode search
+      const timeoutId = setTimeout(handleBarcodeSearch, 300);
+      return () => clearTimeout(timeoutId);
+    }
   }, [searchQuery]);
+
+  const filteredProducts = useMemo(() => {
+    if (!searchQuery) return products.filter(p => p.stock > 0);
+    const query = searchQuery.toLowerCase();
+    return products.filter(p => 
+      (p.name.toLowerCase().includes(query) || 
+       p.code.toLowerCase().includes(query) ||
+       (p.category && p.category.toLowerCase().includes(query))) &&
+      p.stock > 0
+    );
+  }, [searchQuery, products]);
 
   const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
   const tax = subtotal * TAX_RATE;
@@ -68,22 +132,71 @@ function PosPage() {
     if (cart.length > 0) setView('checkout');
   };
 
-  const finalizeTransaction = (amountReceived: number, method: 'cash' | 'card') => {
-    const newTransaction: Transaction = {
-      id: Date.now().toString(),
-      date: new Date(),
-      items: [...cart],
-      subtotal,
-      tax,
-      total,
-      cashReceived: amountReceived,
-      change: amountReceived - total,
-      paymentMethod: method
-    };
-    setTransaction(newTransaction);
-    setView('receipt');
-    setCart([]);
-    playKaChing();
+  const finalizeTransaction = async (amountReceived: number, method: 'cash' | 'card') => {
+    try {
+      // Get current user for transaction record
+      const { user } = await (window as any).api.auth.getCurrentUser();
+      
+      // Generate transaction ID
+      const transactionId = `TXN-${Date.now()}`;
+      
+      // Prepare transaction data for database
+      const transactionData = {
+        transaction_id: transactionId,
+        subtotal,
+        tax_amount: tax,
+        total_amount: total,
+        payment_method: method,
+        items: cart.map(item => ({
+          product_id: parseInt(item.id),
+          quantity: item.quantity,
+          unit_price: item.price,
+          subtotal: item.price * item.quantity,
+        })),
+        created_by: user ? user.id : null,
+      };
+
+      // Save to database
+      const response = await (window as any).api.transactions.create(transactionData);
+      
+      if (response.success) {
+        const newTransaction: Transaction = {
+          id: transactionId,
+          date: new Date(),
+          items: [...cart],
+          subtotal,
+          tax,
+          total,
+          cashReceived: amountReceived,
+          change: amountReceived - total,
+          paymentMethod: method,
+          status: 'Completed'
+        };
+        setTransaction(newTransaction);
+        setView('receipt');
+        setCart([]);
+        playKaChing();
+        
+        // Refresh products to update stock
+        const productsResponse = await (window as any).api.products.getAll();
+        if (productsResponse.success && productsResponse.data) {
+          const mappedProducts: Product[] = productsResponse.data.map((p: any) => ({
+            id: p.id.toString(),
+            name: p.name,
+            code: p.sku || p.barcode || `PROD-${p.id}`,
+            price: parseFloat(p.price) || 0,
+            stock: parseInt(p.stock) || 0,
+            category: p.category || 'Uncategorized',
+          }));
+          setProducts(mappedProducts);
+        }
+      } else {
+        throw new Error(response.message || 'Failed to save transaction');
+      }
+    } catch (error: any) {
+      console.error('Failed to finalize transaction:', error);
+      alert(`Error: ${error.message || 'Failed to save transaction'}`);
+    }
   };
 
   // Sound Effects
@@ -239,17 +352,24 @@ function PosPage() {
 
            {/* Product Grid */}
            <div className="flex-1 overflow-y-auto pr-2 pb-20">
-             <div className="grid grid-cols-4 gap-4">
-               {filteredProducts.map(product => (
-                 <ProductCard key={product.id} product={product} onClick={addToCart} />
-               ))}
-               {filteredProducts.length === 0 && (
-                 <div className="col-span-full flex flex-col items-center justify-center text-stone-400 mt-20">
-                    <Search size={48} className="mb-4 opacity-20" />
-                    <p>No products found.</p>
-                 </div>
-               )}
-             </div>
+             {loading ? (
+               <div className="col-span-full flex flex-col items-center justify-center text-stone-400 mt-20">
+                 <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mb-4"></div>
+                 <p>Loading products...</p>
+               </div>
+             ) : (
+               <div className="grid grid-cols-4 gap-4">
+                 {filteredProducts.map(product => (
+                   <ProductCard key={product.id} product={product} onClick={addToCart} />
+                 ))}
+                 {filteredProducts.length === 0 && (
+                   <div className="col-span-full flex flex-col items-center justify-center text-stone-400 mt-20">
+                      <Search size={48} className="mb-4 opacity-20" />
+                      <p>No products found.</p>
+                   </div>
+                 )}
+               </div>
+             )}
            </div>
         </div>
 

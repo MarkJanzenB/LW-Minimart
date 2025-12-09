@@ -1,12 +1,60 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Calendar, Search, SlidersHorizontal } from 'lucide-react';
-import { MOCK_TRANSACTIONS } from '@/constants';
 import { Transaction } from '@/integrations/supabase/types';
 
 function TransactionHistoryPage() {
-  const [transactions, setTransactions] = useState<Transaction[]>(MOCK_TRANSACTIONS);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [sortOrder, setSortOrder] = useState('desc');
+  const [loading, setLoading] = useState(true);
+
+  // Fetch transactions from database
+  useEffect(() => {
+    const fetchTransactions = async () => {
+      try {
+        setLoading(true);
+        const response = await (window as any).api.transactions.getAll();
+        if (response.success && response.data) {
+          // Map database transactions to Transaction interface
+          const mappedTransactions: Transaction[] = response.data.map((t: any) => {
+            // Parse items if stored as JSON string, otherwise use empty array
+            let items: any[] = [];
+            try {
+              items = typeof t.items === 'string' ? JSON.parse(t.items) : (t.items || []);
+            } catch (e) {
+              console.error('Failed to parse transaction items:', e);
+            }
+
+            return {
+              id: t.transaction_id || t.id.toString(),
+              date: new Date(t.date || t.created_at),
+              items: items.map((item: any) => ({
+                id: item.product_id?.toString() || item.id?.toString() || '',
+                name: item.product_name || 'Unknown Product',
+                code: item.product_barcode || '',
+                price: parseFloat(item.unit_price) || 0,
+                stock: 0,
+                category: '',
+                quantity: parseInt(item.quantity) || 0,
+              })),
+              subtotal: parseFloat(t.subtotal) || 0,
+              tax: parseFloat(t.tax) || parseFloat(t.tax_amount) || 0,
+              total: parseFloat(t.total) || parseFloat(t.total_amount) || 0,
+              paymentMethod: t.payment_method || 'cash',
+              status: t.status || 'Completed',
+            };
+          });
+          setTransactions(mappedTransactions);
+        }
+      } catch (error) {
+        console.error('Failed to fetch transactions:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchTransactions();
+  }, []);
 
   const filteredTransactions = useMemo(() => {
     return transactions
@@ -18,7 +66,9 @@ function TransactionHistoryPage() {
       });
   }, [transactions, searchTerm, sortOrder]);
 
-  const handleRefund = (transactionId: string) => {
+  const handleRefund = async (transactionId: string) => {
+    // TODO: Implement refund in database
+    // For now, just update local state
     setTransactions(prev => 
       prev.map(t => t.id === transactionId ? { ...t, status: 'Refunded' } : t)
     );
@@ -58,19 +108,25 @@ function TransactionHistoryPage() {
 
       {/* Transaction Table */}
       <div className="flex-1 overflow-y-auto bg-card rounded-lg border border-border">
-        <table className="w-full text-sm text-left">
-          <thead className="bg-muted/50 sticky top-0">
-            <tr>
-              <th className="p-4 font-medium">Transaction ID</th>
-              <th className="p-4 font-medium">Date</th>
-              <th className="p-4 font-medium">Items</th>
-              <th className="p-4 font-medium text-right">Total</th>
-              <th className="p-4 font-medium">Status</th>
-              <th className="p-4 font-medium"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredTransactions.map(t => (
+        {loading ? (
+          <div className="flex items-center justify-center py-20">
+            <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+            <span className="ml-4 text-muted-foreground">Loading transactions...</span>
+          </div>
+        ) : (
+          <table className="w-full text-sm text-left">
+            <thead className="bg-muted/50 sticky top-0">
+              <tr>
+                <th className="p-4 font-medium">Transaction ID</th>
+                <th className="p-4 font-medium">Date</th>
+                <th className="p-4 font-medium">Items</th>
+                <th className="p-4 font-medium text-right">Total</th>
+                <th className="p-4 font-medium">Status</th>
+                <th className="p-4 font-medium"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredTransactions.map(t => (
               <tr key={t.id} className="border-b border-border last:border-b-0 hover:bg-muted/30">
                 <td className="p-4 font-mono text-xs">{t.id}</td>
                 <td className="p-4 text-muted-foreground">{new Date(t.date).toLocaleString()}</td>
@@ -92,10 +148,11 @@ function TransactionHistoryPage() {
                   )}
                 </td>
               </tr>
-            ))}
-          </tbody>
-        </table>
-        {filteredTransactions.length === 0 && (
+              ))}
+            </tbody>
+          </table>
+        )}
+        {!loading && filteredTransactions.length === 0 && (
           <div className="text-center py-20 text-muted-foreground">
             <p>No transactions found.</p>
           </div>

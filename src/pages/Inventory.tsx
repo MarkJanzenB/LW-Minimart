@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import {
   Search,
   Plus,
@@ -57,156 +57,7 @@ const getRowClassName = (item: InventoryItem): string => {
   return "";
 };
 
-// Sample Data
-const sampleInventoryData: InventoryItem[] = [
-  {
-    id: "INV001",
-    name: "Organic Green Tea",
-    price: 24.99,
-    stock: 145,
-    minStock: 20,
-    category: "Beverages",
-    expiryDate: "2025-08-15",
-    status: "In Stock",
-    batchNo: "BT-2024-001",
-    barcode: "8901234567890",
-  },
-  {
-    id: "INV002",
-    name: "Premium Coffee Beans",
-    price: 34.50,
-    stock: 8,
-    minStock: 15,
-    category: "Beverages",
-    expiryDate: "2025-06-20",
-    status: "Low Stock",
-    batchNo: "BT-2024-002",
-    barcode: "8901234567891",
-  },
-  {
-    id: "INV003",
-    name: "Almond Butter",
-    price: 12.99,
-    stock: 25,
-    minStock: 10,
-    category: "Food",
-    expiryDate: "2024-11-30",
-    status: "Expired",
-    batchNo: "BT-2024-003",
-    barcode: "8901234567892",
-  },
-  {
-    id: "INV004",
-    name: "Vitamin D3 Supplements",
-    price: 18.75,
-    stock: 234,
-    minStock: 30,
-    category: "Health",
-    expiryDate: "2026-03-10",
-    status: "In Stock",
-    batchNo: "BT-2024-004",
-    barcode: "8901234567893",
-  },
-  {
-    id: "INV005",
-    name: "Coconut Oil",
-    price: 9.99,
-    stock: 5,
-    minStock: 15,
-    category: "Food",
-    expiryDate: "2025-12-01",
-    status: "Low Stock",
-    batchNo: "BT-2024-005",
-    barcode: "8901234567894",
-  },
-  {
-    id: "INV006",
-    name: "Protein Powder",
-    price: 45.00,
-    stock: 67,
-    minStock: 20,
-    category: "Health",
-    expiryDate: "2025-09-25",
-    status: "In Stock",
-    batchNo: "BT-2024-006",
-    barcode: "8901234567895",
-  },
-  {
-    id: "INV007",
-    name: "Herbal Shampoo",
-    price: 14.25,
-    stock: 3,
-    minStock: 10,
-    category: "Personal Care",
-    expiryDate: "2024-10-15",
-    status: "Expired",
-    batchNo: "BT-2024-007",
-    barcode: "8901234567896",
-  },
-  {
-    id: "INV008",
-    name: "Quinoa Seeds",
-    price: 8.50,
-    stock: 189,
-    minStock: 25,
-    category: "Food",
-    expiryDate: "2026-01-20",
-    status: "In Stock",
-    batchNo: "BT-2024-008",
-    barcode: "8901234567897",
-  },
-  {
-    id: "INV009",
-    name: "Essential Oil Set",
-    price: 29.99,
-    stock: 10,
-    minStock: 12,
-    category: "Personal Care",
-    expiryDate: "2025-07-30",
-    status: "Low Stock",
-    batchNo: "BT-2024-009",
-    barcode: "8901234567898",
-  },
-  {
-    id: "INV010",
-    name: "Matcha Powder",
-    price: 22.00,
-    stock: 56,
-    minStock: 15,
-    category: "Beverages",
-    expiryDate: "2025-11-15",
-    status: "In Stock",
-    batchNo: "BT-2024-010",
-    barcode: "8901234567899",
-  },
-  {
-    id: "INV011",
-    name: "Honey Raw Organic",
-    price: 16.50,
-    stock: 2,
-    minStock: 10,
-    category: "Food",
-    expiryDate: "2024-09-01",
-    status: "Expired",
-    batchNo: "BT-2024-011",
-    barcode: "8901234567900",
-  },
-  {
-    id: "INV012",
-    name: "Omega-3 Fish Oil",
-    price: 28.99,
-    stock: 98,
-    minStock: 20,
-    category: "Health",
-    expiryDate: "2025-10-10",
-    status: "In Stock",
-    batchNo: "BT-2024-012",
-    barcode: "8901234567901",
-  },
-];
-
-// Get unique categories
-const categories = ["All", ...new Set(sampleInventoryData.map((item) => item.category))];
+// Sample data removed - now fetched from database
 
 type SortKey = keyof InventoryItem;
 type SortDirection = "asc" | "desc";
@@ -222,19 +73,58 @@ const Inventory = () => {
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
   const [viewMode, setViewMode] = useState<'list' | 'card'>('list');
   const [currentPage, setCurrentPage] = useState(1);
+  const [inventoryData, setInventoryData] = useState<InventoryItem[]>([]);
+  const [loading, setLoading] = useState(true);
   const itemsPerPage = 20;
+
+  // Fetch inventory from database
+  useEffect(() => {
+    const fetchInventory = async () => {
+      try {
+        setLoading(true);
+        const response = await (window as any).api.products.getInventory();
+        if (response.success && response.data) {
+          // Map database data to InventoryItem interface
+          const mappedData: InventoryItem[] = response.data.map((item: any) => ({
+            id: item.id.toString(),
+            name: item.name,
+            price: parseFloat(item.price) || 0,
+            stock: parseInt(item.stock) || 0,
+            minStock: parseInt(item.minStock) || 0,
+            category: item.category || 'Uncategorized',
+            expiryDate: item.expiryDate || '',
+            status: item.status || 'In Stock',
+            batchNo: item.batchNo || '',
+            barcode: item.barcode || '',
+          }));
+          setInventoryData(mappedData);
+        }
+      } catch (error) {
+        console.error('Failed to fetch inventory:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchInventory();
+  }, []);
+
+  // Get unique categories from inventory data
+  const categories = useMemo(() => {
+    return ["All", ...new Set(inventoryData.map((item) => item.category))];
+  }, [inventoryData]);
 
   // Calculate statistics
   const stats = useMemo(() => {
-    const lowStock = sampleInventoryData.filter((item) => item.stock > 0 && item.stock <= 10).length;
-    const inStock = sampleInventoryData.filter((item) => item.status === "In Stock").length;
-    const expired = sampleInventoryData.filter((item) => item.status === "Expired").length;
+    const lowStock = inventoryData.filter((item) => item.stock > 0 && item.stock <= item.minStock).length;
+    const inStock = inventoryData.filter((item) => item.status === "In Stock").length;
+    const expired = inventoryData.filter((item) => item.status === "Expired").length;
     return { lowStock, inStock, expired };
-  }, []);
+  }, [inventoryData]);
 
   // Filter and sort data
   const filteredData = useMemo(() => {
-    let data = [...sampleInventoryData];
+    let data = [...inventoryData];
 
     // Search filter
     if (searchTerm) {
@@ -271,7 +161,7 @@ const Inventory = () => {
     });
 
     return data;
-  }, [searchTerm, selectedCategory, showLowStockOnly, sortKey, sortDirection]);
+  }, [inventoryData, searchTerm, selectedCategory, showLowStockOnly, sortKey, sortDirection]);
 
   const paginatedData = useMemo(() => {
     const startIndex = (currentPage - 1) * itemsPerPage;
