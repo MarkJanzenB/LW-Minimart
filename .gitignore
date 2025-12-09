@@ -44,3 +44,5 @@ Thumbs.db
 # Database files (each team should have their own local database)
 electron/db/store.db
 *.db
+*.db-shm
+*.db-wal

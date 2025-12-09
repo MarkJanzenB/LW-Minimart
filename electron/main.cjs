@@ -128,7 +128,10 @@ function createWindow() {
   });
 
   if (isDev) {
-    mainWindow.loadURL("http://localhost:5173");
+    // Use port from environment variable or default to 8080 (matching vite.config.ts)
+    const port = process.env.VITE_PORT || "8080";
+    const devUrl = `http://localhost:${port}`;
+    mainWindow.loadURL(devUrl);
   } else {
     mainWindow.loadFile(join(__dirname, "..", "dist", "index.html"));
   }

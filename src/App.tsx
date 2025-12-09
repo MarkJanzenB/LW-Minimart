@@ -7,7 +7,7 @@ import Index from "./pages/Index";
 import SignIn from "./pages/SignIn";
 import SignUp from "./pages/SignUp";
 import About from "./pages/About";
-import Developers from "./pages/Developers";
+import OwnerSetup from "./pages/OwnerSetup";
 import Dashboard from "./pages/Dashboard";
 import Reports from "./pages/Reports";
 import Settings from "./pages/Settings";
@@ -34,7 +34,6 @@ const App = () => (
           <Route path="/signup" element={<SignUp />} />
           <Route path="/owner-setup" element={<OwnerSetup />} />
           <Route path="/about" element={<About />} />
-          <Route path="/developers" element={<Developers />} />
           <Route element={<Layout />}>
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/pos" element={<PosPage />} />

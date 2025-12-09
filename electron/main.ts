@@ -1,7 +1,6 @@
 import { app, BrowserWindow } from "electron";
 import { join } from "path";
 import { registerAuthIpc } from "./ipc/auth";
-import { registerDbIpc } from "./ipc/db";
 import { db } from "./db/db"; // Use the centralized db instance
 
 // Suppress cache-related console errors (these are harmless warnings)
@@ -51,7 +50,6 @@ if (productCount.count === 0) {
 
 // Initialize IPC handlers
 registerAuthIpc(db);
-registerDbIpc();
 
 const isDev = process.env.ELECTRON_DEV === "true";
 
@@ -80,7 +78,9 @@ function createWindow() {
   });
 
   if (isDev) {
-    const devUrl = "http://localhost:5173";
+    // Use port from environment variable or default to 8080 (matching vite.config.ts)
+    const port = process.env.VITE_PORT || "8080";
+    const devUrl = `http://localhost:${port}`;
     console.log('Loading URL:', devUrl);
     mainWindow.loadURL(devUrl).catch(err => {
       console.error('Failed to load URL:', err);
