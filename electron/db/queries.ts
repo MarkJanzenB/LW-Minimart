@@ -414,6 +414,49 @@ export function getDashboardMetrics() {
   `);
   const recentTransactions = recentTransactionsStmt.all() as any[];
 
+  // Get top products by sales
+  const topProductsStmt = db.prepare(`
+    SELECT 
+      p.id,
+      p.name,
+      SUM(ti.quantity) as quantity_sold,
+      SUM(ti.subtotal) as total_sales
+    FROM products p
+    INNER JOIN transaction_items ti ON p.id = ti.product_id
+    INNER JOIN transactions t ON ti.transaction_id = t.id
+    WHERE t.status = 'Completed'
+    GROUP BY p.id, p.name
+    ORDER BY total_sales DESC
+    LIMIT 10
+  `);
+  const topProducts = topProductsStmt.all() as any[];
+
+  // Get inventory by category breakdown
+  const categoryBreakdownStmt = db.prepare(`
+    SELECT 
+      COALESCE(c.name, 'Uncategorized') as category,
+      COUNT(DISTINCT p.id) as product_count,
+      COALESCE(SUM(b.quantity), 0) as total_stock
+    FROM products p
+    LEFT JOIN categories c ON p.category_id = c.id
+    LEFT JOIN batches b ON p.id = b.product_id
+    WHERE p.is_active = 1
+    GROUP BY c.name
+    ORDER BY total_stock DESC
+  `);
+  const categoryBreakdown = categoryBreakdownStmt.all() as any[];
+
+  // Calculate category percentages for pie chart
+  const totalStockForPercentage = categoryBreakdown.reduce((sum, cat) => sum + (cat.total_stock || 0), 0);
+  const inventoryByCategory = categoryBreakdown.map(cat => ({
+    category: cat.category,
+    value: totalStockForPercentage > 0 
+      ? Math.round((cat.total_stock / totalStockForPercentage) * 100) 
+      : 0,
+    productCount: cat.product_count,
+    totalStock: cat.total_stock
+  }));
+
   return {
     revenue: {
       total: revenue?.totalRevenue || 0,
@@ -428,5 +471,7 @@ export function getDashboardMetrics() {
       expiringSoonCount,
     },
     recentTransactions: recentTransactions || [],
+    topProducts: topProducts || [],
+    inventoryByCategory: inventoryByCategory || [],
   };
 }

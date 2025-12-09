@@ -3,14 +3,17 @@ import { useState, useEffect, useCallback } from "react";
 import { Users, Code, Database, ChevronLeft, ChevronRight, ExternalLink } from "lucide-react";
 
 // Developer images
+import MarkBandola from "@/assets/developers/Mark_Bandola.jpg";
 import AngeloCajegas from "@/assets/developers/Angelo_Cajegas.jpeg";
 import AnamerahAbdullah from "@/assets/developers/Anamerah_Abdullah.jpeg";
 import RichelleCandidato from "@/assets/developers/Richelle_Candidato.jpeg";
 import LukeStanleyCastro from "@/assets/developers/Luke_Stanley_Castro.jpeg";
-import LloydScottCabido from "@/assets/developers/Lloyd_Scott_Cabido.jpeg";
 import ChristianBrentAlpez from "@/assets/developers/Christian_Brent_Alpez.jpeg";
-import KristofferTesaluna from "@/assets/developers/Kristoffer_Tesaluna.jpg";
 import JenniferBendoy from "@/assets/developers/Jennifer_Bendoy.jpeg";
+import JulianneAban from "@/assets/developers/Julianne_Aban.jpg";
+import KristofferTesaluna from "@/assets/developers/Kristoffer_Tesaluna.jpg";
+import DonnalynTopacio from "@/assets/developers/Donnalyn_Topacio.jpg";
+import LloydScottCabido from "@/assets/developers/Lloyd_Scott_Cabido.jpeg";
 
 interface Developer {
   name: string;
@@ -22,7 +25,7 @@ interface Developer {
 
 const developers: Developer[] = [
   // Fullstack Developers
-  { name: "Mark Bandola", role: "Fullstack Developer", image: null, category: "fullstack" },
+  { name: "Mark Bandola", role: "Fullstack Developer", image: MarkBandola, category: "fullstack" },
   { name: "Angelo Cajegas", role: "Fullstack Developer", image: AngeloCajegas, category: "fullstack", portfolio: "https://angelocajegas.vercel.app/" },
   { name: "Anamerah Abdullah", role: "Fullstack Developer", image: AnamerahAbdullah, category: "fullstack" },
   // Frontend Developers
@@ -31,9 +34,9 @@ const developers: Developer[] = [
   { name: "Jennifer Bendoy", role: "Frontend Developer", image: JenniferBendoy, category: "frontend" },
   { name: "Richelle Candidato", role: "Frontend Developer", image: RichelleCandidato, category: "frontend" },
   // Backend Developers
-  { name: "Julianne Aban", role: "Backend Developer", image: null, category: "backend" },
+  { name: "Julianne Aban", role: "Backend Developer", image: JulianneAban, category: "backend" },
   { name: "Kristoffer Tesaluna", role: "Backend Developer", image: KristofferTesaluna, category: "backend" },
-  { name: "Donnalyn Topacio", role: "Backend Developer", image: null, category: "backend" },
+  { name: "Donnalyn Topacio", role: "Backend Developer", image: DonnalynTopacio, category: "backend" },
   { name: "Lloyd Scott Cabido", role: "Backend Developer", image: LloydScottCabido, category: "backend" },
 ];
 
