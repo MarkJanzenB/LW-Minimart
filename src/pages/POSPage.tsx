@@ -4,7 +4,7 @@ import { SidebarTrigger } from '@/components/ui/sidebar';
 import { formatCurrency } from '@/hooks/use-currency';
 
 import { Product, CartItem, Transaction, ViewState } from '@/integrations/supabase/types'; 
-import { MOCK_PRODUCTS, TAX_RATE } from '@/constants';
+import { TAX_RATE } from '@/constants';
 import { useTransactionStore } from '@/stores/transactionStore';
 import { useToast } from '@/components/ui/use-toast';
 
@@ -21,6 +21,7 @@ function PosPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [transaction, setTransaction] = useState<Transaction | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
+  const kaChingAudioRef = useRef<HTMLAudioElement | null>(null);
   const { toast } = useToast();
 
   const [selectedCartItemIndex, setSelectedCartItemIndex] = useState<number | null>(null);
@@ -336,6 +337,25 @@ function PosPage() {
   };
 
   const playKaChing = () => {
+    const KA_CHING_URL = '/sounds/kaching.mp3'; // Place your own file in public/sounds/kaching.mp3
+    if (KA_CHING_URL) {
+      try {
+        if (!kaChingAudioRef.current) {
+          kaChingAudioRef.current = new Audio(KA_CHING_URL);
+        }
+        const audio = kaChingAudioRef.current;
+        audio.currentTime = 0;
+        audio.play().catch(() => synthKaChing());
+        return;
+      } catch {
+        synthKaChing();
+        return;
+      }
+    }
+    synthKaChing();
+  };
+
+  const synthKaChing = () => {
     // Layered "ka-ching" style effect using two quick chimes and a low thump
     const ctx = getAudioContext();
     const now = ctx.currentTime;
@@ -388,6 +408,8 @@ function PosPage() {
 
   useEffect(() => {
     const handleGlobalKeys = (e: KeyboardEvent) => {
+      if (view !== 'pos') return;
+
       if (e.key === ' ' || e.key === 'Spacebar') {
         e.preventDefault();
         setIsScannerOpen(true);
@@ -471,7 +493,7 @@ function PosPage() {
   return (
     <>
       
-      <div className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-10">
+      <div className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-20">
         <div className="px-8 py-6 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <SidebarTrigger />
@@ -549,7 +571,7 @@ function PosPage() {
              </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-4 space-y-2 min-h-0">
+          <div className="flex-1 overflow-y-auto p-4 pt-5 space-y-2 min-h-0">
             {cart.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-stone-400 space-y-4 opacity-60">
                 <ShoppingCart size={64} />
