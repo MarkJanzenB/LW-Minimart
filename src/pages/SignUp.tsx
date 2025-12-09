@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -7,7 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 import logo from "@/assets/lw-mini-mart-logo.png";
 
 const SignUp = () => {
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -15,8 +16,14 @@ const SignUp = () => {
   const { toast } = useToast();
 
   useEffect(() => {
-    const checkUser = async () => {
+    const checkUserAndOwner = async () => {
       try {
+        const { hasOwner } = await window.api.auth.hasOwner();
+        if (!hasOwner) {
+          navigate("/owner-setup");
+          return;
+        }
+
         const { user } = await window.api.auth.getCurrentUser();
         if (user) {
           navigate("/");
@@ -25,7 +32,7 @@ const SignUp = () => {
         console.error("Error checking current user:", error);
       }
     };
-    checkUser();
+    checkUserAndOwner();
   }, [navigate]);
 
   const handleSignUp = async (e: React.FormEvent) => {
@@ -52,7 +59,7 @@ const SignUp = () => {
     setLoading(true);
 
     try {
-      const response = await window.api.auth.register(email, password);
+      const response = await window.api.auth.register(username, password);
 
       if (!response.success) {
         throw new Error(response.message || "Unable to create account");
@@ -89,12 +96,15 @@ const SignUp = () => {
           <source src="/auth-background.mp4" type="video/mp4" />
         </video>
         
-        {/* Dark Overlay */}
-        <div className="absolute inset-0 bg-black/40"></div>
-        
-        {/* Logo at Bottom Left */}
-        <div className="absolute bottom-8 left-8 z-10">
-          <img src={logo} alt="LW Mini Mart" className="h-10" />
+        {/* Dark Overlay with Back Button */}
+        <div className="absolute inset-0 bg-black/40">
+          <Link
+            to="/"
+            className="absolute top-6 left-6 z-20 inline-flex items-center gap-2 rounded-full bg-white/90 px-4 py-2 text-sm font-medium text-foreground shadow-lg transition hover:bg-white dark:bg-foreground/80 dark:text-background dark:hover:bg-foreground"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back to landing
+          </Link>
         </div>
       </div>
 
@@ -115,15 +125,15 @@ const SignUp = () => {
           {/* Form */}
           <form onSubmit={handleSignUp} className="space-y-6">
             <div className="space-y-2">
-              <Label htmlFor="email" className="text-sm text-muted-foreground">
-                Email Address
+              <Label htmlFor="username" className="text-sm text-muted-foreground">
+                Username
               </Label>
               <Input
-                id="email"
-                type="email"
-                placeholder="name@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                id="username"
+                type="text"
+                placeholder="owner01"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
                 required
                 className="h-12 bg-muted border-0 rounded-lg"
               />
