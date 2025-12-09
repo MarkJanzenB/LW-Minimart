@@ -122,9 +122,34 @@ const Inventory = () => {
   useEffect(() => {
     const loadProducts = async () => {
       try {
+        setIsLoading(true);
+
+        // Prefer electron bridge if available
+        if (typeof window !== 'undefined' && (window as any).api?.products?.getAll) {
+          const response = await (window as any).api.products.getAll();
+          if (response.success && response.data) {
+            const formattedProducts = response.data.map((p: any) => ({
+              id: p.id?.toString() ?? '',
+              name: p.name,
+              sku: p.sku,
+              price: Number(p.price) || 0,
+              stock: Number(p.stock ?? p.stock_quantity ?? 0),
+              minStock: Number(p.minStock ?? p.min_stock ?? 0),
+              category: p.category ?? 'Uncategorized',
+              expiryDate: p.expiryDate ?? p.expiry_date ?? '',
+              status: p.status ?? 'In Stock',
+              batchNo: p.batchNo ?? p.batch_no ?? '',
+              barcode: p.barcode ?? '',
+              imageUrl: p.imageUrl ?? '',
+            }));
+            setInventory(formattedProducts);
+            return;
+          }
+        }
+
+        // Fallback to local IndexedDB service
         const products = await dbService.getProducts();
         const activeProducts = products.filter((product) => !(product.status === 'Spoiled' && product.stock === 0));
-        // Map database products to InventoryItem format
         const formattedProducts = activeProducts.map((product) => ({
           id: product.id,
           name: product.name,
@@ -1020,6 +1045,7 @@ const Inventory = () => {
               <thead>
                 <tr>
                   <th>ID</th>
+                  <th>Image</th>
                   <th>Name</th>
                   <th>SKU</th>
                   <th>Price</th>
@@ -1034,6 +1060,17 @@ const Inventory = () => {
                 {adminMirror.map((item) => (
                   <tr key={item.id}>
                     <td className="font-mono text-xs text-muted-foreground">{item.id}</td>
+                    <td>
+                      {item.imageUrl ? (
+                        <img
+                          src={item.imageUrl}
+                          alt={item.name}
+                          className="w-10 h-10 object-cover rounded-md"
+                        />
+                      ) : (
+                        <Package className="w-6 h-6 text-muted-foreground/40 mx-auto" />
+                      )}
+                    </td>
                     <td>{item.name}</td>
                     <td>{item.sku}</td>
                     <td className="tabular-nums">${item.price.toFixed(2)}</td>

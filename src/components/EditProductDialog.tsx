@@ -72,6 +72,23 @@ export function EditProductDialog({
     }));
   };
 
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const result = reader.result;
+      if (typeof result === 'string') {
+        setFormData((prev) => ({
+          ...prev,
+          imageUrl: result,
+        }));
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!product) return;
@@ -246,22 +263,31 @@ export function EditProductDialog({
 
             <div className="space-y-2">
               <Label htmlFor="barcode">Barcode</Label>
-              <Input
-                id="barcode"
-                name="barcode"
-                value={formData.barcode}
-                onChange={handleChange}
-              />
+              <div className="flex gap-2">
+                <Input
+                  id="barcode"
+                  name="barcode"
+                  value={formData.barcode}
+                  onChange={handleChange}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {}}
+                >
+                  Scan Barcode
+                </Button>
+              </div>
             </div>
 
             <div className="space-y-2 md:col-span-2">
-              <Label htmlFor="imageUrl">Image URL (optional)</Label>
+              <Label htmlFor="imageUrl">Product Image (optional)</Label>
               <Input
                 id="imageUrl"
                 name="imageUrl"
-                type="url"
-                value={formData.imageUrl}
-                onChange={handleChange}
+                type="file"
+                accept="image/*"
+                onChange={handleImageChange}
               />
             </div>
           </div>

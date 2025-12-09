@@ -56,10 +56,20 @@ export function AddProductDialog({ isOpen, onClose, onProductAdded }: AddProduct
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
+    setFormData(prev => {
+      const updated = {
+        ...prev,
+        [name]: value,
+      };
+
+      if (name === 'cost') {
+        const costNumber = parseFloat(value) || 0;
+        const sellingPrice = costNumber + costNumber * 0.5;
+        updated.price = sellingPrice.toFixed(2);
+      }
+
+      return updated;
+    });
 
     if (name === 'name') {
       void checkExistingByName(value);
@@ -71,6 +81,31 @@ export function AddProductDialog({ isOpen, onClose, onProductAdded }: AddProduct
       ...prev,
       [name]: value
     }));
+
+    if (name === 'category') {
+      void generateSkuForCategory(value);
+    }
+  };
+
+  const generateSkuForCategory = async (category: string) => {
+    const allProducts = await dbService.getProducts();
+    const skuPrefixMap: Record<string, string> = {
+      Beverages: 'B',
+      Food: 'F',
+      Supplements: 'SU',
+      Snacks: 'SN',
+      Other: 'O',
+    };
+    const prefix = skuPrefixMap[category] ?? 'O';
+    const existingForCategory = allProducts.filter(
+      (p) => p.category === category && p.sku.startsWith(`${prefix}-`)
+    );
+    const skuCounter = existingForCategory.length;
+    const generatedSku = `${prefix}-${skuCounter.toString().padStart(3, '0')}`;
+    setFormData(prev => ({
+      ...prev,
+      sku: generatedSku
+    }));
   };
 
   const handleRestockFieldChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -79,6 +114,23 @@ export function AddProductDialog({ isOpen, onClose, onProductAdded }: AddProduct
       ...prev,
       [name]: value,
     }));
+  };
+
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const result = reader.result;
+      if (typeof result === 'string') {
+        setFormData(prev => ({
+          ...prev,
+          imageUrl: result,
+        }));
+      }
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -105,6 +157,7 @@ export function AddProductDialog({ isOpen, onClose, onProductAdded }: AddProduct
 
       await dbService.addProduct({
         ...formData,
+        sku: formData.sku,
         cost: parseFloat(formData.cost) || 0,
         price: parseFloat(formData.price) || 0,
         stock: normalizedStock,
@@ -247,9 +300,9 @@ export function AddProductDialog({ isOpen, onClose, onProductAdded }: AddProduct
                 id="sku"
                 name="sku"
                 value={formData.sku}
-                onChange={handleChange}
+                readOnly
                 required
-                placeholder="e.g., TEA-001"
+                placeholder="Auto-generated based on category"
               />
             </div>
             
@@ -307,9 +360,9 @@ export function AddProductDialog({ isOpen, onClose, onProductAdded }: AddProduct
                 step="0.01"
                 min="0"
                 value={formData.price}
-                onChange={handleChange}
+                readOnly
                 required
-                placeholder="0.00"
+                placeholder="Auto-calculated from cost"
               />
             </div>
             
@@ -357,31 +410,39 @@ export function AddProductDialog({ isOpen, onClose, onProductAdded }: AddProduct
                 id="batchNo"
                 name="batchNo"
                 value={formData.batchNo}
-                onChange={handleChange}
-                placeholder="e.g., 001 or leave blank"
+                readOnly
+                placeholder="Auto-generated on save"
               />
             </div>
             
             <div className="space-y-2">
               <Label htmlFor="barcode">Barcode</Label>
-              <Input
-                id="barcode"
-                name="barcode"
-                value={formData.barcode}
-                onChange={handleChange}
-                placeholder="e.g., 123456789012"
-              />
+              <div className="flex gap-2">
+                <Input
+                  id="barcode"
+                  name="barcode"
+                  value={formData.barcode}
+                  onChange={handleChange}
+                  placeholder="e.g., 123456789012"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {}}
+                >
+                  Scan Barcode
+                </Button>
+              </div>
             </div>
             
             <div className="space-y-2 md:col-span-2">
-              <Label htmlFor="imageUrl">Image URL (optional)</Label>
+              <Label htmlFor="imageUrl">Product Image (optional)</Label>
               <Input
                 id="imageUrl"
                 name="imageUrl"
-                type="url"
-                value={formData.imageUrl}
-                onChange={handleChange}
-                placeholder="https://example.com/image.jpg"
+                type="file"
+                accept="image/*"
+                onChange={handleImageChange}
               />
             </div>
           </div>

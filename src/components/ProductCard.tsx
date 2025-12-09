@@ -33,7 +33,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onClick }) => {
           {formatCurrency(product.price)}
         </span>
         <span className={`text-xs px-2 py-1 rounded-full ${isLowStock ? 'bg-destructive/10 text-destructive font-medium' : 'bg-muted text-muted-foreground'}`}>
-          {product.stock_quantity ?? product.stock} left
+          {Math.max(product.stock_quantity ?? product.stock, 0)} left
         </span>
       </div>
     </button>
