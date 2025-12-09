@@ -182,7 +182,7 @@ export interface Transaction {
   change?: number;
   paymentMethod: 'cash' | 'qr';
   referenceNumber?: string;
-  status?: 'Completed' | 'Refunded';
+  status?: 'Completed';
 }
 
 export type ViewState = 'pos' | 'checkout' | 'receipt';

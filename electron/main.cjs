@@ -133,6 +133,88 @@ ipcMain.handle("inventory:delete", (_event, id) => {
   return { success: true };
 });
 
+// ---- Product IPC (SQLite-backed) ----
+ipcMain.handle("products:getAll", () => {
+  try {
+    const stmt = db.prepare(`
+      SELECT 
+        p.*,
+        COALESCE(SUM(b.quantity), 0) AS stock_quantity
+      FROM products p
+      LEFT JOIN batches b ON b.product_id = p.id
+      GROUP BY p.id
+      ORDER BY p.name
+    `);
+    return { success: true, data: stmt.all() };
+  } catch (error) {
+    console.error("Failed to get products:", error);
+    return { success: false, message: error.message };
+  }
+});
+
+ipcMain.handle("products:getByBarcode", (_event, barcode) => {
+  try {
+    const stmt = db.prepare(`
+      SELECT 
+        p.*,
+        COALESCE(SUM(b.quantity), 0) AS stock_quantity
+      FROM products p
+      LEFT JOIN batches b ON b.product_id = p.id
+      WHERE p.barcode = ?
+      GROUP BY p.id
+      LIMIT 1
+    `);
+    const product = stmt.get(barcode);
+    return { success: true, data: product || null };
+  } catch (error) {
+    console.error("Failed to get product by barcode:", error);
+    return { success: false, message: error.message };
+  }
+});
+
+// ---- Sales IPC ----
+ipcMain.handle("db:getSalesWithItems", () => {
+  try {
+    const salesStmt = db.prepare(`
+      SELECT
+        s.id,
+        s.transaction_date,
+        s.total_amount,
+        s.payment_method,
+        s.cash_received,
+        s.change,
+        s.reference_number
+      FROM sales s
+      ORDER BY s.transaction_date DESC
+    `);
+
+    const itemsStmt = db.prepare(`
+      SELECT
+        si.sale_id,
+        si.product_id,
+        si.quantity,
+        si.price,
+        p.name,
+        p.sku,
+        p.barcode
+      FROM sale_items si
+      LEFT JOIN products p ON p.id = si.product_id
+      WHERE si.sale_id = ?
+    `);
+
+    const sales = salesStmt.all();
+    const result = sales.map((sale) => ({
+      ...sale,
+      items: itemsStmt.all(sale.id),
+    }));
+
+    return { success: true, data: result };
+  } catch (error) {
+    console.error("Failed to get sales with items:", error);
+    return { success: false, message: error.message };
+  }
+});
+
 const isDev = process.env.ELECTRON_DEV === "true";
 
 function createWindow() {
