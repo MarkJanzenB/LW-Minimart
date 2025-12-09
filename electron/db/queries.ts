@@ -20,6 +20,7 @@ interface InventoryMirrorRow {
   updatedAt: string;
 }
 
+// Products queries
 export function getProducts() {
   const sql = `
     SELECT p.*, SUM(b.quantity) as stock_quantity

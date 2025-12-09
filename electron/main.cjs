@@ -1,11 +1,31 @@
 const { app, BrowserWindow, ipcMain } = require("electron");
 const { join } = require("path");
+const { readFileSync, mkdirSync } = require("fs");
 const Database = require("better-sqlite3");
 const { registerAuthIpc } = require("./ipc/auth.cjs");
 
+// Suppress cache-related console errors (these are harmless warnings)
+const originalConsoleError = console.error;
+console.error = (...args) => {
+  const message = args[0]?.toString() || "";
+  // Filter out cache-related errors
+  if (
+    message.includes("Unable to move the cache") ||
+    message.includes("Unable to create cache") ||
+    message.includes("Gpu Cache Creation failed") ||
+    message.includes("disk_cache")
+  ) {
+    return; // Suppress these errors
+  }
+  originalConsoleError.apply(console, args);
+};
+
 let mainWindow = null;
 
-const dbPath = join(__dirname, "db", "store.db");
+// Use the same database setup as db.ts - apply schema from schema.sql
+const dbDir = join(__dirname, "db");
+mkdirSync(dbDir, { recursive: true });
+const dbPath = join(dbDir, "store.db");
 const db = new Database(dbPath);
 
 db.exec(`
@@ -36,6 +56,18 @@ db.exec(`
   );
 `);
 
+// Apply schema from schema.sql file
+try {
+  const schemaPath = join(dbDir, "schema.sql");
+  const schema = readFileSync(schemaPath, "utf-8");
+  if (schema && schema.trim().length > 0) {
+    db.exec(schema);
+  }
+} catch (e) {
+  console.error("Failed to apply database schema:", e);
+}
+
+// No default users - users must be created through owner-setup
 registerAuthIpc(db);
 
 // Inventory mirror IPC

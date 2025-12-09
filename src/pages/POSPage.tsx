@@ -4,7 +4,7 @@ import { SidebarTrigger } from '@/components/ui/sidebar';
 import { formatCurrency } from '@/hooks/use-currency';
 
 import { Product, CartItem, Transaction, ViewState } from '@/integrations/supabase/types'; 
-import { MOCK_PRODUCTS, TAX_RATE } from '@/constants';
+import { TAX_RATE } from '@/constants';
 import ProductCard from '@/components/ProductCard';
 import CartItemComponent from '@/components/CartItem';
 import CheckoutModal from '@/components/CheckoutModal';
@@ -45,6 +45,17 @@ function PosPage() {
       (p.barcode && p.barcode.toLowerCase().includes(query))
     );
   }, [searchQuery, products, cart]);
+
+  const filteredProducts = useMemo(() => {
+    if (!searchQuery) return products.filter(p => p.stock > 0);
+    const query = searchQuery.toLowerCase();
+    return products.filter(p => 
+      (p.name.toLowerCase().includes(query) || 
+       p.code.toLowerCase().includes(query) ||
+       (p.category && p.category.toLowerCase().includes(query))) &&
+      p.stock > 0
+    );
+  }, [searchQuery, products]);
 
   const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
   const tax = subtotal * TAX_RATE;

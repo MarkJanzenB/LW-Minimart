@@ -161,16 +161,20 @@ const Index = () => {
 
   const handleGetStarted = async () => {
     try {
+      // Check if owner exists or if database is missing
       const { hasOwner } = await (window as any).api.auth.hasOwner();
+      
+      // If owner doesn't exist OR database is missing (error case), go to owner-setup
+      // Otherwise, go to login
       if (!hasOwner) {
         navigate("/owner-setup");
-        return;
+      } else {
+        navigate("/signin");
       }
-
-      navigate("/signin");
     } catch (error) {
+      // If there's an error (e.g., database missing), redirect to owner-setup
       console.error("Error handling get started:", error);
-      navigate("/signin");
+      navigate("/owner-setup");
     }
   };
 
@@ -970,7 +974,7 @@ const Index = () => {
             <Button 
               size="lg"
               className="glass-card hover:glow-primary text-lg px-12 py-6 rounded-2xl text-foreground font-semibold"
-              onClick={() => navigate("/signin")}
+              onClick={handleStartFreeTrial}
             >
               <TrendingUp className="w-5 h-5" />
               Start Free Trial

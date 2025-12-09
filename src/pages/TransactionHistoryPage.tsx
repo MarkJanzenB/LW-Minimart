@@ -6,9 +6,58 @@ import { Transaction } from '@/integrations/supabase/types';
 import { formatCurrency } from '@/hooks/use-currency';
 
 function TransactionHistoryPage() {
-  const [transactions, setTransactions] = useState<Transaction[]>(MOCK_TRANSACTIONS);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [sortOrder, setSortOrder] = useState('desc');
+  const [loading, setLoading] = useState(true);
+
+  // Fetch transactions from database
+  useEffect(() => {
+    const fetchTransactions = async () => {
+      try {
+        setLoading(true);
+        const response = await (window as any).api.transactions.getAll();
+        if (response.success && response.data) {
+          // Map database transactions to Transaction interface
+          const mappedTransactions: Transaction[] = response.data.map((t: any) => {
+            // Parse items if stored as JSON string, otherwise use empty array
+            let items: any[] = [];
+            try {
+              items = typeof t.items === 'string' ? JSON.parse(t.items) : (t.items || []);
+            } catch (e) {
+              console.error('Failed to parse transaction items:', e);
+            }
+
+            return {
+              id: t.transaction_id || t.id.toString(),
+              date: new Date(t.date || t.created_at),
+              items: items.map((item: any) => ({
+                id: item.product_id?.toString() || item.id?.toString() || '',
+                name: item.product_name || 'Unknown Product',
+                code: item.product_barcode || '',
+                price: parseFloat(item.unit_price) || 0,
+                stock: 0,
+                category: '',
+                quantity: parseInt(item.quantity) || 0,
+              })),
+              subtotal: parseFloat(t.subtotal) || 0,
+              tax: parseFloat(t.tax) || parseFloat(t.tax_amount) || 0,
+              total: parseFloat(t.total) || parseFloat(t.total_amount) || 0,
+              paymentMethod: t.payment_method || 'cash',
+              status: t.status || 'Completed',
+            };
+          });
+          setTransactions(mappedTransactions);
+        }
+      } catch (error) {
+        console.error('Failed to fetch transactions:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchTransactions();
+  }, []);
 
   const filteredTransactions = useMemo(() => {
     const term = searchTerm.toLowerCase();
@@ -24,7 +73,9 @@ function TransactionHistoryPage() {
       });
   }, [transactions, searchTerm, sortOrder]);
 
-  const handleRefund = (transactionId: string) => {
+  const handleRefund = async (transactionId: string) => {
+    // TODO: Implement refund in database
+    // For now, just update local state
     setTransactions(prev => 
       prev.map(t => t.id === transactionId ? { ...t, status: 'Refunded' } : t)
     );
@@ -117,10 +168,11 @@ function TransactionHistoryPage() {
                   )}
                 </td>
               </tr>
-            ))}
-          </tbody>
-        </table>
-        {filteredTransactions.length === 0 && (
+              ))}
+            </tbody>
+          </table>
+        )}
+        {!loading && filteredTransactions.length === 0 && (
           <div className="text-center py-20 text-muted-foreground">
             <p>No transactions found.</p>
           </div>

@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { CreditCard, Banknote, Printer, X } from 'lucide-react';
+import { CreditCard, Banknote, Printer, QrCode, X } from 'lucide-react';
 import { CartItem } from '../types';
 import { formatCurrency } from '@/hooks/use-currency';
 

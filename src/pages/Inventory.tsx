@@ -392,6 +392,8 @@ const Inventory = () => {
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
   const [viewMode, setViewMode] = useState<"list" | "card">("list");
   const [currentPage, setCurrentPage] = useState(1);
+  const [inventoryData, setInventoryData] = useState<InventoryItem[]>([]);
+  const [loading, setLoading] = useState(true);
   const itemsPerPage = 20;
 
   const baseData: InventoryItem[] = inventory.length > 0 ? inventory : sampleInventoryData;
