@@ -13,7 +13,7 @@ import BarcodeScannerModal from '@/components/BarcodeScannerModal';
 
 function PosPage() {
   const [view, setView] = useState<ViewState>('pos');
-  const [products, setProducts] = useState<Product[]>(MOCK_PRODUCTS.map(p => ({...p, stock_quantity: p.stock, barcode: p.code})));
+  const [products, setProducts] = useState<Product[]>([]);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [transaction, setTransaction] = useState<Transaction | null>(null);
@@ -21,10 +21,42 @@ function PosPage() {
   const [selectedProductIndex, setSelectedProductIndex] = useState<number | null>(0);
   const [activeList, setActiveList] = useState<'products' | 'cart'>('products');
   const [isScannerOpen, setIsScannerOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   const searchInputRef = useRef<HTMLInputElement>(null);
   const cartItemsRef = useRef<(HTMLDivElement | null)[]>([]);
   const productItemsRef = useRef<(HTMLDivElement | null)[]>([]);
+
+  // Fetch products from database
+  useEffect(() => {
+    const fetchProducts = async () => {
+      try {
+        setLoading(true);
+        const response = await (window as any).api.products.getAll();
+        if (response.success && response.data) {
+          // Map database products to Product interface
+          const mappedProducts: Product[] = response.data.map((p: any) => ({
+            id: p.id.toString(),
+            name: p.name,
+            code: p.sku || p.barcode || `PROD-${p.id}`,
+            price: parseFloat(p.price) || 0,
+            stock: parseInt(p.stock) || 0,
+            category: p.category || 'Uncategorized',
+            color: undefined,
+          }));
+          setProducts(mappedProducts);
+        }
+      } catch (error) {
+        console.error('Failed to fetch products:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchProducts();
+  }, []);
+
+  // Handle barcode scanning/search - moved after addToCart is defined
 
   const displayedProducts = useMemo(() => {
     const cartQuantities = cart.reduce((acc, item) => {
@@ -102,28 +134,107 @@ function PosPage() {
 
   const clearCart = () => setCart([]);
 
+  // Handle barcode scanning/search
+  useEffect(() => {
+    if (searchQuery.length >= 8) { // Barcode length is typically 8+ digits
+      const handleBarcodeSearch = async () => {
+        try {
+          const response = await (window as any).api.products.getByBarcode(searchQuery);
+          if (response.success && response.data) {
+            const product = response.data;
+            const mappedProduct: Product = {
+              id: product.id.toString(),
+              name: product.name,
+              code: product.sku || product.barcode || `PROD-${product.id}`,
+              price: parseFloat(product.price) || 0,
+              stock: parseInt(product.stock) || 0,
+              category: product.category || 'Uncategorized',
+            };
+            addToCart(mappedProduct);
+            setSearchQuery('');
+          }
+        } catch (error) {
+          console.error('Failed to search by barcode:', error);
+        }
+      };
+      
+      // Debounce barcode search
+      const timeoutId = setTimeout(handleBarcodeSearch, 300);
+      return () => clearTimeout(timeoutId);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchQuery]);
+
   const handleCheckout = () => {
     if (cart.length > 0) setView('checkout');
   };
 
-  const finalizeTransaction = (amountReceived: number, method: 'cash' | 'qr', referenceNumber?: string) => {
-    const newTransaction: Transaction = {
-      id: Date.now().toString(),
-      date: new Date(),
-      items: [...cart],
-      subtotal,
-      tax,
-      total,
-      cashReceived: method === 'cash' ? amountReceived : undefined,
-      change: method === 'cash' ? amountReceived - total : undefined,
-      paymentMethod: method,
-      referenceNumber: method === 'qr' ? referenceNumber : undefined
-    };
-    // Simulate successful transaction
-    setTransaction(newTransaction);
-    setView('receipt');
-    setCart([]);
-    playKaChing();
+  const finalizeTransaction = async (amountReceived: number, method: 'cash' | 'qr', referenceNumber?: string) => {
+    try {
+      // Get current user for transaction record
+      const { user } = await (window as any).api.auth.getCurrentUser();
+      
+      // Generate transaction ID
+      const transactionId = `TXN-${Date.now()}`;
+      
+      // Prepare transaction data for database
+      const transactionData = {
+        transaction_id: transactionId,
+        subtotal,
+        tax_amount: tax,
+        total_amount: total,
+        payment_method: method,
+        items: cart.map(item => ({
+          product_id: parseInt(item.id),
+          quantity: item.quantity,
+          unit_price: item.price,
+          subtotal: item.price * item.quantity,
+        })),
+        created_by: user ? user.id : null,
+      };
+
+      // Save to database
+      const response = await (window as any).api.transactions.create(transactionData);
+      
+      if (response.success) {
+        const newTransaction: Transaction = {
+          id: transactionId,
+          date: new Date(),
+          items: [...cart],
+          subtotal,
+          tax,
+          total,
+          cashReceived: method === 'cash' ? amountReceived : undefined,
+          change: method === 'cash' ? amountReceived - total : undefined,
+          paymentMethod: method,
+          referenceNumber: method === 'qr' ? referenceNumber : undefined,
+          status: 'Completed'
+        };
+        setTransaction(newTransaction);
+        setView('receipt');
+        setCart([]);
+        playKaChing();
+        
+        // Refresh products to update stock
+        const productsResponse = await (window as any).api.products.getAll();
+        if (productsResponse.success && productsResponse.data) {
+          const mappedProducts: Product[] = productsResponse.data.map((p: any) => ({
+            id: p.id.toString(),
+            name: p.name,
+            code: p.sku || p.barcode || `PROD-${p.id}`,
+            price: parseFloat(p.price) || 0,
+            stock: parseInt(p.stock) || parseInt(p.stock_quantity) || 0,
+            category: p.category || 'Uncategorized',
+          }));
+          setProducts(mappedProducts);
+        }
+      } else {
+        throw new Error(response.message || 'Failed to save transaction');
+      }
+    } catch (error: any) {
+      console.error('Failed to finalize transaction:', error);
+      alert(`Error: ${error.message || 'Failed to save transaction'}`);
+    }
   };
 
   // Sound Effects

@@ -1,5 +1,5 @@
 import { ipcMain } from 'electron';
-import { getTransactions, getTransactionById, createTransaction } from '../db/queries';
+import { getTransactions, getTransactionById, createTransaction, getDashboardMetrics } from '../db/queries';
 
 export function registerTransactionsIpc() {
   ipcMain.handle('transactions:getAll', (_event, limit?: number, offset?: number) => {
@@ -27,6 +27,15 @@ export function registerTransactionsIpc() {
       return { success: true, data: result };
     } catch (error: any) {
       console.error('Failed to create transaction:', error);
+      return { success: false, message: error.message };
+    }
+  });
+
+  ipcMain.handle('dashboard:getMetrics', () => {
+    try {
+      return { success: true, data: getDashboardMetrics() };
+    } catch (error: any) {
+      console.error('Failed to get dashboard metrics:', error);
       return { success: false, message: error.message };
     }
   });

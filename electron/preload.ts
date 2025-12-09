@@ -19,6 +19,19 @@ contextBridge.exposeInMainWorld("api", {
     getMirror: () => ipcRenderer.invoke('inventory:getMirror'),
     delete: (id: string) => ipcRenderer.invoke('inventory:delete', id),
   },
+  products: {
+    getAll: () => ipcRenderer.invoke("products:getAll"),
+    getByBarcode: (barcode: string) => ipcRenderer.invoke("products:getByBarcode", barcode),
+    getInventory: () => ipcRenderer.invoke("products:getInventory"),
+  },
+  transactions: {
+    getAll: (limit?: number, offset?: number) => ipcRenderer.invoke("transactions:getAll", limit, offset),
+    getById: (transactionId: string) => ipcRenderer.invoke("transactions:getById", transactionId),
+    create: (transactionData: any) => ipcRenderer.invoke("transactions:create", transactionData),
+  },
+  dashboard: {
+    getMetrics: () => ipcRenderer.invoke("dashboard:getMetrics"),
+  },
 });
 
 declare global {
@@ -43,6 +56,19 @@ declare global {
         syncFromClient(products: Product[]): Promise<void>;
         getMirror(): Promise<Product[]>;
         delete(id: string): Promise<void>;
+      };
+      products: {
+        getAll(): Promise<{ success: boolean; data?: any[]; message?: string }>;
+        getByBarcode(barcode: string): Promise<{ success: boolean; data?: any; message?: string }>;
+        getInventory(): Promise<{ success: boolean; data?: any[]; message?: string }>;
+      };
+      transactions: {
+        getAll(limit?: number, offset?: number): Promise<{ success: boolean; data?: any[]; message?: string }>;
+        getById(transactionId: string): Promise<{ success: boolean; data?: any; message?: string }>;
+        create(transactionData: any): Promise<{ success: boolean; data?: any; message?: string }>;
+      };
+      dashboard: {
+        getMetrics(): Promise<{ success: boolean; data?: any; message?: string }>;
       };
     };
   }
