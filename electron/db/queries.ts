@@ -1,5 +1,5 @@
 import { db } from './db';
-import { Transaction } from '../../src/integrations/supabase/types';
+import { Transaction, CartItem } from '../../src/integrations/supabase/types';
 
 interface InventoryMirrorRow {
   id: string;
@@ -54,7 +54,7 @@ export function getProductByBarcode(barcode: string) {
 
 export function recordSale(transaction: Transaction) {
   const insertSale = db.prepare(
-    'INSERT INTO sales (total_amount, payment_method, cash_received, change) VALUES (@total, @paymentMethod, @cashReceived, @change)'
+    'INSERT INTO sales (total_amount, payment_method, cash_received, change, reference_number) VALUES (@total, @paymentMethod, @cashReceived, @change, @referenceNumber)'
   );
 
   const insertSaleItem = db.prepare(
@@ -73,6 +73,7 @@ export function recordSale(transaction: Transaction) {
       paymentMethod: t.paymentMethod,
       cashReceived: t.cashReceived,
       change: t.change,
+      referenceNumber: t.referenceNumber ?? null,
     });
 
     const saleId = saleResult.lastInsertRowid;
@@ -109,8 +110,96 @@ export function recordSale(transaction: Transaction) {
     console.error('Error recording sale', err);
     throw err;
   }
-  const stmt = db.prepare('SELECT * FROM products');
-  return stmt.all();
+}
+
+type SaleRow = {
+  id: number;
+  transaction_date: string;
+  total_amount: number;
+  payment_method: string;
+  cash_received: number | null;
+  change: number | null;
+  reference_number: string | null;
+};
+
+type SaleItemRow = {
+  sale_id: number;
+  product_id: number;
+  quantity: number;
+  price: number;
+  name: string;
+  sku: string | null;
+  barcode: string | null;
+  category: string;
+};
+
+export function getSalesWithItems(): Transaction[] {
+  const sales = db
+    .prepare(
+      'SELECT id, transaction_date, total_amount, payment_method, cash_received, change, reference_number FROM sales ORDER BY transaction_date DESC, id DESC'
+    )
+    .all() as SaleRow[];
+
+  if (!sales.length) {
+    return [];
+  }
+
+  const saleItems = db
+    .prepare(
+      `SELECT si.sale_id, si.product_id, si.quantity, si.price,
+              p.name, p.sku, p.barcode,
+              COALESCE(c.name, '') as category
+         FROM sale_items si
+         JOIN products p ON si.product_id = p.id
+         LEFT JOIN categories c ON p.category_id = c.id`
+    )
+    .all() as SaleItemRow[];
+
+  const itemsBySaleId = new Map<number, SaleItemRow[]>();
+
+  for (const item of saleItems) {
+    const existing = itemsBySaleId.get(item.sale_id);
+    if (existing) {
+      existing.push(item);
+    } else {
+      itemsBySaleId.set(item.sale_id, [item]);
+    }
+  }
+
+  return sales.map((sale) => {
+    const rows = itemsBySaleId.get(sale.id) ?? [];
+
+    const items: CartItem[] = rows.map((row) => ({
+      id: String(row.product_id),
+      name: row.name,
+      code: row.sku ?? '',
+      price: row.price,
+      stock: 0,
+      category: row.category,
+      quantity: row.quantity,
+      barcode: row.barcode ?? undefined,
+    }));
+
+    const subtotal = rows.reduce(
+      (sum, row) => sum + row.price * row.quantity,
+      0
+    );
+    const tax = sale.total_amount - subtotal;
+
+    return {
+      id: String(sale.id),
+      date: new Date(sale.transaction_date),
+      items,
+      subtotal,
+      tax: tax >= 0 ? tax : 0,
+      total: sale.total_amount,
+      cashReceived: sale.cash_received ?? undefined,
+      change: sale.change ?? undefined,
+      paymentMethod: sale.payment_method === 'cash' ? 'cash' : 'qr',
+      referenceNumber: sale.reference_number ?? undefined,
+      status: 'Completed',
+    };
+  });
 }
 
 // Inventory mirror helpers

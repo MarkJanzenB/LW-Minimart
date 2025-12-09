@@ -46,3 +46,4 @@ electron/db/store.db
 *.db
 *.db-shm
 *.db-wal
+electron/db/store.db

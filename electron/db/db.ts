@@ -20,3 +20,12 @@ try {
 } catch (e) {
   console.error("Failed to apply database schema:", e);
 }
+
+try {
+  db.exec("ALTER TABLE sales ADD COLUMN reference_number TEXT");
+} catch (e) {
+  const message = e instanceof Error ? e.message : String(e);
+  if (!message.includes("duplicate column name")) {
+    console.error("Failed to update sales table:", e);
+  }
+}

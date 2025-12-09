@@ -18,6 +18,10 @@ contextBridge.exposeInMainWorld("api", {
     getMirror: () => ipcRenderer.invoke("inventory:getMirror"),
     delete: (id) => ipcRenderer.invoke("inventory:delete", id),
   },
+  db: {
+    recordSale: (transaction) => ipcRenderer.invoke("db:recordSale", transaction),
+    getSalesWithItems: () => ipcRenderer.invoke("db:getSalesWithItems"),
+  },
   products: {
     getAll: () => ipcRenderer.invoke("products:getAll"),
     getByBarcode: (barcode) => ipcRenderer.invoke("products:getByBarcode", barcode),

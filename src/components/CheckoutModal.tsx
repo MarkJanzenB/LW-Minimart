@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { CreditCard, Banknote, Printer, QrCode, X } from 'lucide-react';
-import { CartItem } from '../types';
+import { Banknote, Printer, QrCode } from 'lucide-react';
 import { formatCurrency } from '@/hooks/use-currency';
+import { useToast } from '@/components/ui/use-toast';
 
 interface CheckoutModalProps {
   total: number;
@@ -14,6 +14,7 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ total, onConfirm, onCance
   const [cashRecieved, setCashRecieved] = useState<string>('');
   const [referenceNumber, setReferenceNumber] = useState<string>('');
   const inputRef = useRef<HTMLInputElement>(null);
+  const { toast } = useToast();
 
   useEffect(() => {  
     if (inputRef.current) {
@@ -28,6 +29,7 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ total, onConfirm, onCance
       if (e.key === 'F1') setMethod('qr');
       if (e.key === 'F5') setMethod('cash');
       if (e.key === 'Enter') {
+        e.preventDefault();
         handlePayment();
       }
     };
@@ -42,6 +44,11 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ total, onConfirm, onCance
 
   const handlePayment = () => {
     if (!isSufficient) {
+      toast({
+        title: 'Payment incomplete',
+        description: method === 'cash' ? 'Cash received is less than total due.' : 'Enter a reference number for QR.',
+        variant: 'destructive',
+      });
       return;
     }
 
@@ -91,30 +98,53 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ total, onConfirm, onCance
             </div>
 
             {method === 'cash' && (
-              <div className="mb-8 animate-in slide-in-from-top-4 duration-300">
-                <label className="block text-stone-600 font-semibold mb-2">Cash Received</label>
-                <input 
-                  ref={inputRef}
-                  type="number" 
-                  value={cashRecieved}
-                  onChange={(e) => setCashRecieved(e.target.value)}
-                  placeholder="0.00"
-                  className="w-full text-4xl p-6 bg-white border border-stone-200 rounded-xl focus:ring-4 focus:ring-orange-100 focus:border-orange-400 outline-none transition-all font-mono"
-                />
-              </div>
+              <>
+                <div className="mb-6 animate-in slide-in-from-top-4 duration-300">
+                  <label className="block text-stone-600 font-semibold mb-2">Cash Received</label>
+                  <input 
+                    ref={inputRef}
+                    type="number" 
+                    value={cashRecieved}
+                    onChange={(e) => setCashRecieved(e.target.value)}
+                    placeholder="0.00"
+                    className="w-full text-4xl p-6 bg-white border border-stone-200 rounded-xl focus:ring-4 focus:ring-orange-100 focus:border-orange-400 outline-none transition-all font-mono"
+                  />
+                </div>
+                <div
+                  className={`rounded-xl mb-4 md:mb-6 transition-colors duration-300 ${
+                    isCashSufficient ? 'bg-[#3E5C48] text-white' : 'bg-red-50 text-red-500'
+                  } p-6 md:p-8`}
+                >
+                  <div className="flex justify-between items-end">
+                    <span className="text-lg font-medium opacity-80">
+                      Change Due
+                    </span>
+                    <span className="font-bold font-mono text-4xl md:text-5xl">
+                      {formatCurrency(change)}
+                    </span>
+                  </div>
+                </div>
+              </>
             )}
 
-            <div className={`p-8 rounded-xl mb-8 transition-colors duration-300 ${isSufficient ? 'bg-[#3E5C48] text-white' : 'bg-red-50 text-red-500'}`}>
-              <div className="flex justify-between items-end">
-                <span className="text-lg font-medium opacity-80">
-                  {method === 'cash' ? 'Change Due' : 'Status'}
-                </span>
-                <span className="text-5xl font-bold font-mono">
-                  {method === 'cash' ? formatCurrency(change) : 'Ready'}
-                </span>
-              </div>
-              <div>
-                  <label className="block text-stone-600 font-semibold mb-1 md:mb-2 text-sm md:text-base">Reference Number</label>
+            {method === 'qr' && (
+              <div className="mb-3 md:mb-4 animate-in slide-in-from-top-4 duration-300 space-y-2 md:space-y-3">
+                <div className="flex items-center gap-3 md:gap-5">
+                  <div className="p-3 md:p-4 bg-white border border-stone-200 rounded-xl shadow-sm">
+                    <img
+                      src="/qr-code.png"
+                      alt="QR code for payment"
+                      className="w-48 h-48 md:w-52 md:h-52 object-contain"
+                    />
+                  </div>
+                  <div className="text-xs md:text-sm text-stone-500 max-w-xs">
+                    Scan the QR code, then enter the reference number below.
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-stone-600 font-semibold mb-1 md:mb-2 text-sm md:text-base">
+                    Reference Number
+                  </label>
                   <input 
                     ref={inputRef}
                     type="text" 
@@ -123,22 +153,6 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ total, onConfirm, onCance
                     placeholder="Reference number from QR payment"
                     className="w-full text-xs md:text-sm p-2 md:p-2.5 bg-white border border-stone-200 rounded-xl focus:ring-4 focus:ring-orange-100 focus:border-orange-400 outline-none transition-all font-mono"
                   />
-                </div>
-              </div>
-
-            {method === 'cash' && (
-              <div
-                className={`rounded-xl mb-4 md:mb-6 transition-colors duration-300 ${
-                  isSufficient ? 'bg-[#3E5C48] text-white' : 'bg-red-50 text-red-500'
-                } p-6 md:p-8`}
-              >
-                <div className="flex justify-between items-end">
-                  <span className="text-lg font-medium opacity-80">
-                    Change Due
-                  </span>
-                  <span className="font-bold font-mono text-4xl md:text-5xl">
-                    ₱{change.toFixed(2)}
-                  </span>
                 </div>
               </div>
             )}

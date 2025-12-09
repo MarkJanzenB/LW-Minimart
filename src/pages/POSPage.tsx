@@ -5,6 +5,9 @@ import { formatCurrency } from '@/hooks/use-currency';
 
 import { Product, CartItem, Transaction, ViewState } from '@/integrations/supabase/types'; 
 import { TAX_RATE } from '@/constants';
+import { useTransactionStore } from '@/stores/transactionStore';
+import { useToast } from '@/components/ui/use-toast';
+
 import ProductCard from '@/components/ProductCard';
 import CartItemComponent from '@/components/CartItem';
 import CheckoutModal from '@/components/CheckoutModal';
@@ -17,11 +20,17 @@ function PosPage() {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [transaction, setTransaction] = useState<Transaction | null>(null);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const kaChingAudioRef = useRef<HTMLAudioElement | null>(null);
+  const { toast } = useToast();
+
   const [selectedCartItemIndex, setSelectedCartItemIndex] = useState<number | null>(null);
   const [selectedProductIndex, setSelectedProductIndex] = useState<number | null>(0);
   const [activeList, setActiveList] = useState<'products' | 'cart'>('products');
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+
+  const addTransactionToStore = useTransactionStore((state) => state.addTransaction);
 
   const searchInputRef = useRef<HTMLInputElement>(null);
   const cartItemsRef = useRef<(HTMLDivElement | null)[]>([]);
@@ -40,7 +49,8 @@ function PosPage() {
             name: p.name,
             code: p.sku || p.barcode || `PROD-${p.id}`,
             price: parseFloat(p.price) || 0,
-            stock: parseInt(p.stock) || 0,
+            stock: parseInt(p.stock ?? p.stock_quantity) || 0,
+            barcode: p.barcode || '',
             category: p.category || 'Uncategorized',
             color: undefined,
           }));
@@ -92,13 +102,19 @@ function PosPage() {
   const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
   const tax = subtotal * TAX_RATE;
   const total = subtotal + tax;
+
+  const getStockForProduct = (id: string) => {
+    const product = products.find(p => p.id === id);
+    return product ? product.stock : 0;
+  };
   
   // Cart Actions
   const addToCart = (product: Product) => {
     const cartItem = cart.find(item => item.id === product.id);
     const currentQuantityInCart = cartItem ? cartItem.quantity : 0;
+    const availableStock = getStockForProduct(product.id);
 
-    if (product.stock_quantity > currentQuantityInCart) {
+    if (currentQuantityInCart < availableStock) {
       setCart(prev => {
         const existingIndex = prev.findIndex(item => item.id === product.id);
         if (existingIndex !== -1) {
@@ -114,18 +130,46 @@ function PosPage() {
       });
       playBeep();
     } else {
-      console.log('Product is out of stock');
+      toast({
+        title: 'Out of stock',
+        description: `${product.name} has no more stock available.`,
+        variant: 'destructive',
+      });
+      playError();
     }
   };
 
   const updateQuantity = (id: string, delta: number) => {
-    setCart(prev => prev.map(item => {
-      if (item.id === id) {
-        const newQty = item.quantity + delta;
-        return newQty > 0 ? { ...item, quantity: newQty } : item;
+    const availableStock = getStockForProduct(id);
+    setCart(prev => {
+      const item = prev.find(i => i.id === id);
+      if (!item) return prev;
+
+      const newQty = item.quantity + delta;
+
+      if (newQty < 1) {
+        playDecrement();
+        return prev.filter(i => i.id !== id);
       }
-      return item;
-    }));
+
+      if (newQty > availableStock) {
+        toast({
+          title: 'Stock limit reached',
+          description: `Only ${availableStock} in stock for ${item.name}.`,
+          variant: 'destructive',
+        });
+        playError();
+        return prev;
+      }
+
+      const updated = prev.map(i => (i.id === id ? { ...i, quantity: newQty } : i));
+      if (delta > 0) {
+        playBeep();
+      } else {
+        playDecrement();
+      }
+      return updated;
+    });
   };
 
   const removeFromCart = (id: string) => {
@@ -238,33 +282,115 @@ function PosPage() {
   };
 
   // Sound Effects
+  const getAudioContext = () => {
+    if (!audioCtxRef.current) {
+      audioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+    }
+    return audioCtxRef.current;
+  };
+
   const playBeep = () => {
-    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const ctx = getAudioContext();
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
+    osc.type = 'square';
+    osc.frequency.value = 1040;
+    gain.gain.value = 0.12;
     osc.connect(gain);
     gain.connect(ctx.destination);
-    osc.frequency.value = 800;
-    gain.gain.value = 0.1;
-    osc.start();
-    gain.gain.exponentialRampToValueAtTime(0.00001, ctx.currentTime + 0.1);
-    osc.stop(ctx.currentTime + 0.1);
+    const now = ctx.currentTime;
+    gain.gain.setValueAtTime(0.12, now);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.12);
+    osc.start(now);
+    osc.stop(now + 0.14);
+  };
+
+  const playDecrement = () => {
+    const ctx = getAudioContext();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sawtooth';
+    osc.frequency.value = 420;
+    gain.gain.value = 0.12;
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    const now = ctx.currentTime;
+    gain.gain.setValueAtTime(0.12, now);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.12);
+    osc.start(now);
+    osc.stop(now + 0.14);
+  };
+
+  const playError = () => {
+    const ctx = getAudioContext();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'square';
+    osc.frequency.value = 220;
+    gain.gain.value = 0.15;
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    const now = ctx.currentTime;
+    gain.gain.setValueAtTime(0.15, now);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.25);
+    osc.start(now);
+    osc.stop(now + 0.3);
   };
 
   const playKaChing = () => {
-    // Simple high pitch success sound
-    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.frequency.value = 1200;
-    gain.gain.value = 0.1;
-    osc.type = 'sine';
-    osc.start();
-    osc.frequency.exponentialRampToValueAtTime(2000, ctx.currentTime + 0.1);
-    gain.gain.exponentialRampToValueAtTime(0.00001, ctx.currentTime + 0.3);
-    osc.stop(ctx.currentTime + 0.3);
+    const KA_CHING_URL = '/sounds/kaching.mp3'; // Place your own file in public/sounds/kaching.mp3
+    if (KA_CHING_URL) {
+      try {
+        if (!kaChingAudioRef.current) {
+          kaChingAudioRef.current = new Audio(KA_CHING_URL);
+        }
+        const audio = kaChingAudioRef.current;
+        audio.currentTime = 0;
+        audio.play().catch(() => synthKaChing());
+        return;
+      } catch {
+        synthKaChing();
+        return;
+      }
+    }
+    synthKaChing();
+  };
+
+  const synthKaChing = () => {
+    // Layered "ka-ching" style effect using two quick chimes and a low thump
+    const ctx = getAudioContext();
+    const now = ctx.currentTime;
+
+    const playChime = (frequency: number, startTime: number, duration = 0.25) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.value = frequency;
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      gain.gain.setValueAtTime(0.18, startTime);
+      gain.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
+      osc.start(startTime);
+      osc.stop(startTime + duration + 0.05);
+    };
+
+    const playThump = (startTime: number) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(120, startTime);
+      osc.frequency.exponentialRampToValueAtTime(60, startTime + 0.18);
+      gain.gain.setValueAtTime(0.22, startTime);
+      gain.gain.exponentialRampToValueAtTime(0.0001, startTime + 0.2);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(startTime);
+      osc.stop(startTime + 0.25);
+    };
+
+    playThump(now);
+    playChime(1320, now + 0.05);
+    playChime(1760, now + 0.14);
   };
 
   const handleSearchEnter = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -283,6 +409,8 @@ function PosPage() {
 
   useEffect(() => {
     const handleGlobalKeys = (e: KeyboardEvent) => {
+      if (view !== 'pos') return;
+
       if (e.key === ' ' || e.key === 'Spacebar') {
         e.preventDefault();
         setIsScannerOpen(true);
@@ -366,7 +494,7 @@ function PosPage() {
   return (
     <>
       
-      <div className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-10">
+      <div className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-20">
         <div className="px-8 py-6 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <SidebarTrigger />
@@ -404,7 +532,7 @@ function PosPage() {
                 onClick={() => setIsScannerOpen(true)}
                 className="px-6 py-2 bg-card border border-border rounded-lg font-semibold text-muted-foreground flex items-center gap-2 hover:bg-muted transition-colors shadow-sm">
 
-                <Scan size={18} /> Scan
+                <Scan size={18} /> Scan Barcode
              </button>
            </div>
 
@@ -431,8 +559,8 @@ function PosPage() {
            </div>
         </div>
 
-        <div className="w-[35%] bg-card border-l border-border flex flex-col shadow-xl z-10 relative">
-          <div className="p-4 bg-muted/50 border-b border-border">
+        <div className="w-[35%] bg-card border-l border-border flex flex-col shadow-xl z-10 relative min-h-0">
+          <div className="p-4 bg-muted/50 border-b border-border sticky top-0 z-10">
              <div className="flex items-center gap-3">
                <div className="bg-primary p-2 rounded-lg text-primary-foreground">
                  <ShoppingCart size={20} />
@@ -444,7 +572,7 @@ function PosPage() {
              </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-4 space-y-2">
+          <div className="flex-1 overflow-y-auto p-4 pt-5 space-y-2 min-h-0">
             {cart.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-stone-400 space-y-4 opacity-60">
                 <ShoppingCart size={64} />
