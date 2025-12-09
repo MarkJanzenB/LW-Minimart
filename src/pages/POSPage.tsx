@@ -41,21 +41,40 @@ function PosPage() {
     const fetchProducts = async () => {
       try {
         setLoading(true);
-        const response = await (window as any).api.products.getAll();
-        if (response.success && response.data) {
-          // Map database products to Product interface
-          const mappedProducts: Product[] = response.data.map((p: any) => ({
-            id: p.id.toString(),
-            name: p.name,
-            code: p.sku || p.barcode || `PROD-${p.id}`,
-            price: parseFloat(p.price) || 0,
-            stock: parseInt(p.stock ?? p.stock_quantity) || 0,
-            barcode: p.barcode || '',
-            category: p.category || 'Uncategorized',
-            color: undefined,
-          }));
-          setProducts(mappedProducts);
+
+        // Prefer Electron SQLite data if available and non-empty
+        if (typeof window !== 'undefined' && (window as any).api?.products?.getAll) {
+          const response = await (window as any).api.products.getAll();
+          if (response.success && Array.isArray(response.data) && response.data.length > 0) {
+            const mappedProducts: Product[] = response.data.map((p: any) => ({
+              id: p.id.toString(),
+              name: p.name,
+              code: p.sku || p.barcode || `PROD-${p.id}`,
+              price: parseFloat(p.price) || 0,
+              stock: parseInt(p.stock ?? p.stock_quantity) || 0,
+              barcode: p.barcode || '',
+              category: p.category || 'Uncategorized',
+              color: undefined,
+            }));
+            setProducts(mappedProducts);
+            return;
+          }
         }
+
+        // Fallback: use local IndexedDB data (same as Inventory page)
+        const { dbService } = await import('@/services/database');
+        const localProducts = await dbService.getProducts();
+        const mappedLocal: Product[] = localProducts.map((p: any) => ({
+          id: p.id.toString(),
+          name: p.name,
+          code: p.sku || p.barcode || `PROD-${p.id}`,
+          price: parseFloat(p.price) || 0,
+          stock: parseInt(p.stock) || 0,
+          barcode: p.barcode || '',
+          category: p.category || 'Uncategorized',
+          color: undefined,
+        }));
+        setProducts(mappedLocal);
       } catch (error) {
         console.error('Failed to fetch products:', error);
       } finally {
@@ -64,6 +83,17 @@ function PosPage() {
     };
 
     fetchProducts();
+  }, []);
+
+  // Preload the ka-ching audio once to avoid first-play delay
+  useEffect(() => {
+    try {
+      const audio = new Audio('/sounds/kaching.mp3');
+      audio.load();
+      kaChingAudioRef.current = audio;
+    } catch {
+      // ignore preload errors
+    }
   }, []);
 
   // Handle barcode scanning/search - moved after addToCart is defined
@@ -178,35 +208,64 @@ function PosPage() {
 
   const clearCart = () => setCart([]);
 
-  // Handle barcode scanning/search
-  useEffect(() => {
-    if (searchQuery.length >= 8) { // Barcode length is typically 8+ digits
-      const handleBarcodeSearch = async () => {
-        try {
-          const response = await (window as any).api.products.getByBarcode(searchQuery);
-          if (response.success && response.data) {
-            const product = response.data;
-            const mappedProduct: Product = {
-              id: product.id.toString(),
-              name: product.name,
-              code: product.sku || product.barcode || `PROD-${product.id}`,
-              price: parseFloat(product.price) || 0,
-              stock: parseInt(product.stock) || 0,
-              category: product.category || 'Uncategorized',
-            };
-            addToCart(mappedProduct);
-            setSearchQuery('');
-          }
-        } catch (error) {
-          console.error('Failed to search by barcode:', error);
+  // Barcode lookup helper (Electron -> IndexedDB fallback)
+  const findProductByBarcode = async (barcode: string): Promise<Product | null> => {
+    try {
+      const api = (window as any).api;
+      if (api?.products?.getByBarcode) {
+        const res = await api.products.getByBarcode(barcode);
+        if (res.success && res.data) {
+          const p = res.data;
+          return {
+            id: p.id?.toString?.() ?? '',
+            name: p.name,
+            code: p.sku || p.barcode || `PROD-${p.id}`,
+            price: Number(p.price) || 0,
+            stock: Number(p.stock ?? p.stock_quantity ?? 0) || 0,
+            barcode: p.barcode || '',
+            category: p.category || 'Uncategorized',
+            color: undefined,
+          };
         }
-      };
-      
-      // Debounce barcode search
-      const timeoutId = setTimeout(handleBarcodeSearch, 300);
+      }
+    } catch (err) {
+      console.error('Barcode lookup via Electron failed', err);
+    }
+
+    try {
+      const { dbService } = await import('@/services/database');
+      const products = await dbService.getProducts();
+      const match = products.find((p: any) => (p.barcode ?? '').toString() === barcode);
+      if (match) {
+        return {
+          id: match.id?.toString?.() ?? '',
+          name: match.name,
+          code: match.sku || match.barcode || `PROD-${match.id}`,
+          price: Number(match.price) || 0,
+          stock: Number(match.stock ?? 0) || 0,
+          barcode: match.barcode || '',
+          category: match.category || 'Uncategorized',
+          color: undefined,
+        };
+      }
+    } catch (err) {
+      console.error('Barcode lookup via IndexedDB failed', err);
+    }
+    return null;
+  };
+
+  // Passive barcode scanning: auto-add when a scan hits the input
+  useEffect(() => {
+    if (searchQuery.length >= 3) {
+      const timeoutId = setTimeout(async () => {
+        const found = await findProductByBarcode(searchQuery);
+        if (found) {
+          addToCart(found);
+          setSearchQuery('');
+        }
+      }, 200);
       return () => clearTimeout(timeoutId);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchQuery]);
 
   const handleCheckout = () => {
@@ -229,7 +288,8 @@ function PosPage() {
         total_amount: total,
         payment_method: method,
         items: cart.map(item => ({
-          product_id: parseInt(item.id),
+          // product_id may be non-numeric when coming from IndexedDB; send null to avoid DB errors
+          product_id: Number.isFinite(Number(item.id)) ? Number(item.id) : null,
           quantity: item.quantity,
           unit_price: item.price,
           subtotal: item.price * item.quantity,
@@ -241,6 +301,9 @@ function PosPage() {
       const response = await (window as any).api.transactions.create(transactionData);
       
       if (response.success) {
+        // Play cash register immediately after persistence to avoid UI lag
+        playKaChing();
+
         const newTransaction: Transaction = {
           id: transactionId,
           date: new Date(),
@@ -254,23 +317,55 @@ function PosPage() {
           referenceNumber: method === 'qr' ? referenceNumber : undefined,
           status: 'Completed'
         };
+        addTransactionToStore(newTransaction);
         setTransaction(newTransaction);
         setView('receipt');
         setCart([]);
-        playKaChing();
-        
-        // Refresh products to update stock
-        const productsResponse = await (window as any).api.products.getAll();
-        if (productsResponse.success && productsResponse.data) {
-          const mappedProducts: Product[] = productsResponse.data.map((p: any) => ({
-            id: p.id.toString(),
+
+        // Decrement local IndexedDB stock to stay in sync with POS
+        try {
+          const { dbService } = await import('@/services/database');
+          const products = await dbService.getProducts();
+          const productMap = new Map(products.map((p) => [p.id?.toString?.() ?? '', p]));
+          for (const item of cart) {
+            const prod = productMap.get(item.id);
+            if (!prod) continue;
+            const updated = { ...prod, stock: Math.max(0, (prod.stock ?? 0) - item.quantity) };
+            await dbService.updateProduct(updated as any);
+          }
+          // Refresh local list after decrement
+          const refreshed = await dbService.getProducts();
+          const mappedLocal: Product[] = refreshed.map((p: any) => ({
+            id: p.id?.toString?.() ?? '',
             name: p.name,
             code: p.sku || p.barcode || `PROD-${p.id}`,
-            price: parseFloat(p.price) || 0,
-            stock: parseInt(p.stock) || parseInt(p.stock_quantity) || 0,
+            price: Number(p.price) || 0,
+            stock: Number(p.stock ?? 0) || 0,
+            barcode: p.barcode || '',
             category: p.category || 'Uncategorized',
+            color: undefined,
           }));
-          setProducts(mappedProducts);
+          setProducts(mappedLocal);
+        } catch (err) {
+          console.error('Failed to decrement local stock', err);
+        }
+
+        // Refresh products from Electron if available; fallback to local if empty
+        try {
+          const productsResponse = await (window as any).api.products.getAll();
+          if (productsResponse.success && Array.isArray(productsResponse.data) && productsResponse.data.length > 0) {
+            const mappedProducts: Product[] = productsResponse.data.map((p: any) => ({
+              id: p.id?.toString?.() ?? '',
+              name: p.name,
+              code: p.sku || p.barcode || `PROD-${p.id}`,
+              price: Number(p.price) || 0,
+              stock: Number(p.stock ?? p.stock_quantity ?? 0) || 0,
+              category: p.category || 'Uncategorized',
+            }));
+            setProducts(mappedProducts);
+          }
+        } catch (err) {
+          console.error('Failed to refresh products from Electron', err);
         }
       } else {
         throw new Error(response.message || 'Failed to save transaction');

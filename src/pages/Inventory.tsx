@@ -128,7 +128,8 @@ const Inventory = () => {
         // Prefer electron bridge if available
         if (typeof window !== 'undefined' && (window as any).api?.products?.getAll) {
           const response = await (window as any).api.products.getAll();
-          if (response.success && response.data) {
+          // Only trust electron data if it has rows; otherwise fall back to IndexedDB
+          if (response.success && Array.isArray(response.data) && response.data.length > 0) {
             const formattedProducts = response.data.map((p: any) => ({
               id: p.id?.toString() ?? '',
               name: p.name,
@@ -297,8 +298,6 @@ const Inventory = () => {
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
   const [viewMode, setViewMode] = useState<"list" | "card">("list");
   const [currentPage, setCurrentPage] = useState(1);
-  const [inventoryData, setInventoryData] = useState<InventoryItem[]>([]);
-  const [loading, setLoading] = useState(true);
   const itemsPerPage = 20;
   const lastScannedBarcode = useScannerStore((s) => s.lastScannedBarcode);
   useEffect(() => {
@@ -307,7 +306,8 @@ const Inventory = () => {
     }
   }, [lastScannedBarcode]);
 
-  const baseData: InventoryItem[] = inventoryData;
+  // Use the live inventory array as the base data source
+  const baseData: InventoryItem[] = inventory;
 
   const groupedData: ProductWithBatches[] = useMemo(() => {
     const groups = new Map<string, InventoryItem[]>();
