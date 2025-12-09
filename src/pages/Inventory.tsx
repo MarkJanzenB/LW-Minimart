@@ -122,9 +122,34 @@ const Inventory = () => {
   useEffect(() => {
     const loadProducts = async () => {
       try {
+        setIsLoading(true);
+
+        // Prefer electron bridge if available
+        if (typeof window !== 'undefined' && (window as any).api?.products?.getAll) {
+          const response = await (window as any).api.products.getAll();
+          if (response.success && response.data) {
+            const formattedProducts = response.data.map((p: any) => ({
+              id: p.id?.toString() ?? '',
+              name: p.name,
+              sku: p.sku,
+              price: Number(p.price) || 0,
+              stock: Number(p.stock ?? p.stock_quantity ?? 0),
+              minStock: Number(p.minStock ?? p.min_stock ?? 0),
+              category: p.category ?? 'Uncategorized',
+              expiryDate: p.expiryDate ?? p.expiry_date ?? '',
+              status: p.status ?? 'In Stock',
+              batchNo: p.batchNo ?? p.batch_no ?? '',
+              barcode: p.barcode ?? '',
+              imageUrl: p.imageUrl ?? '',
+            }));
+            setInventory(formattedProducts);
+            return;
+          }
+        }
+
+        // Fallback to local IndexedDB service
         const products = await dbService.getProducts();
         const activeProducts = products.filter((product) => !(product.status === 'Spoiled' && product.stock === 0));
-        // Map database products to InventoryItem format
         const formattedProducts = activeProducts.map((product) => ({
           id: product.id,
           name: product.name,

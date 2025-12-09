@@ -49,7 +49,8 @@ function PosPage() {
             name: p.name,
             code: p.sku || p.barcode || `PROD-${p.id}`,
             price: parseFloat(p.price) || 0,
-            stock: parseInt(p.stock) || 0,
+            stock: parseInt(p.stock ?? p.stock_quantity) || 0,
+            barcode: p.barcode || '',
             category: p.category || 'Uncategorized',
             color: undefined,
           }));

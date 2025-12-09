@@ -98,6 +98,8 @@ CREATE TABLE IF NOT EXISTS inventory_mirror (
   imageUrl TEXT,
   createdAt TEXT,
   updatedAt TEXT
+  );
+  
 CREATE TABLE IF NOT EXISTS sales (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     transaction_date TEXT DEFAULT CURRENT_TIMESTAMP,
