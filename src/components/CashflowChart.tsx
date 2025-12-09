@@ -1,16 +1,7 @@
+import { useState, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { TrendingUp } from "lucide-react";
-
-const cashflowData = [
-  { date: "Nov 25", income: 450, expenses: 150, revenue: 300 },
-  { date: "Nov 26", income: 520, expenses: 180, revenue: 340 },
-  { date: "Nov 27", income: 480, expenses: 200, revenue: 280 },
-  { date: "Nov 28", income: 560, expenses: 220, revenue: 340 },
-  { date: "Nov 29", income: 490, expenses: 190, revenue: 300 },
-  { date: "Nov 30", income: 530, expenses: 210, revenue: 320 },
-  { date: "Dec 1", income: 570, expenses: 230, revenue: 340 },
-];
 
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (active && payload && payload.length) {
@@ -29,6 +20,36 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 };
 
 export function CashflowChart() {
+  const [cashflowData, setCashflowData] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchCashflow = async () => {
+      try {
+        setLoading(true);
+        const response = await (window as any).api.dashboard.getMetrics();
+        if (response.success && response.data?.recentTransactions) {
+          // Transform recent transactions to cashflow format (last 7 days)
+          const data = response.data.recentTransactions.slice(-7).map((t: any) => ({
+            date: new Date(t.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+            income: t.revenue || 0,
+            expenses: 0, // Expenses tracking to be implemented
+            profit: t.revenue || 0,
+          }));
+          setCashflowData(data);
+        } else {
+          setCashflowData([]);
+        }
+      } catch (error) {
+        console.error('Failed to fetch cashflow data:', error);
+        setCashflowData([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchCashflow();
+  }, []);
   return (
     <Card className="p-6 bg-card border-border">
       <div className="flex items-center gap-2 mb-6">
@@ -36,8 +57,17 @@ export function CashflowChart() {
         <h3 className="text-lg font-semibold text-card-foreground">7-Day Cashflow Overview</h3>
       </div>
       
-      <ResponsiveContainer width="100%" height={350}>
-        <LineChart data={cashflowData}>
+      {loading ? (
+        <div className="flex items-center justify-center h-[350px]">
+          <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+        </div>
+      ) : cashflowData.length === 0 ? (
+        <div className="flex items-center justify-center h-[350px] text-muted-foreground">
+          <p>No cashflow data available</p>
+        </div>
+      ) : (
+        <ResponsiveContainer width="100%" height={350}>
+          <LineChart data={cashflowData}>
           <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.3} />
           <XAxis 
             dataKey="date" 
@@ -100,6 +130,7 @@ export function CashflowChart() {
           />
         </LineChart>
       </ResponsiveContainer>
+      )}
     </Card>
   );
 }

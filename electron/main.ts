@@ -1,15 +1,35 @@
 import { app, BrowserWindow } from "electron";
 import { join } from "path";
 import { registerAuthIpc } from "./ipc/auth";
-import { registerDbIpc } from "./ipc/db";
+import { registerProductsIpc } from "./ipc/products";
+import { registerTransactionsIpc } from "./ipc/transactions";
 import { db } from "./db/db"; // Use the centralized db instance
+
+// Suppress cache-related console errors (these are harmless warnings)
+const originalConsoleError = console.error;
+console.error = (...args: any[]) => {
+  const message = args[0]?.toString() || "";
+  // Filter out cache-related errors
+  if (
+    message.includes("Unable to move the cache") ||
+    message.includes("Unable to create cache") ||
+    message.includes("Gpu Cache Creation failed") ||
+    message.includes("disk_cache")
+  ) {
+    return; // Suppress these errors
+  }
+  originalConsoleError.apply(console, args);
+};
 
 let mainWindow: BrowserWindow | null = null;
 
-// Seed the database with some data
+// Optional: Seed the database with sample data (only if ENABLE_SEEDING=true)
+// This is disabled by default - all data should be entered through the application UI
+// The database schema (schema.sql) is the single source of truth for table structure
+if (process.env.ENABLE_SEEDING === 'true') {
 const productCount = db.prepare('SELECT COUNT(*) as count FROM products').get() as { count: number };
 if (productCount.count === 0) {
-  console.log('Seeding database...');
+    console.log('Seeding database with sample data...');
   const products = [
     { name: 'Apple', barcode: '1234567890123', price: 1.5, category: 'Fruit', stock: 100 },
     { name: 'Banana', barcode: '1234567890124', price: 0.5, category: 'Fruit', stock: 150 },
@@ -29,25 +49,23 @@ if (productCount.count === 0) {
   });
 
   seedTransaction(products);
-import { db } from "./db/db";
-import "./ipc/products";
-
-let mainWindow: BrowserWindow | null = null;
-
-const userCount = db.prepare("SELECT COUNT(*) as count FROM users").get() as { count: number };
-if (userCount.count === 0) {
-  const insert = db.prepare("INSERT INTO users (username, password, role) VALUES (?, ?, ?)");
-  insert.run("owner@test.com", "owner123", "owner");
-  insert.run("cashier@test.com", "cashier123", "cashier");
+    console.log('Database seeding completed.');
+  }
 }
+
+// No default users - users must be created through owner-setup
 
 // Initialize IPC handlers
 registerAuthIpc(db);
-registerDbIpc();
+registerProductsIpc();
+registerTransactionsIpc();
 
 const isDev = process.env.ELECTRON_DEV === "true";
 
 function createWindow() {
+  console.log('Creating browser window...');
+  console.log('Is dev mode:', isDev);
+  
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 800,
@@ -56,16 +74,26 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      webSecurity: false, // For development only
     },
     show: false,
   });
+  
+  // Open dev tools for debugging
+  mainWindow.webContents.openDevTools();
 
   mainWindow.once("ready-to-show", () => {
     mainWindow?.show();
   });
 
   if (isDev) {
-    mainWindow.loadURL("http://localhost:8080");
+    // Use port from environment variable or default to 8080 (matching vite.config.ts)
+    const port = process.env.VITE_PORT || "8080";
+    const devUrl = `http://localhost:${port}`;
+    console.log('Loading URL:', devUrl);
+    mainWindow.loadURL(devUrl).catch(err => {
+      console.error('Failed to load URL:', err);
+    });
   } else {
     mainWindow.loadFile(join(__dirname, "..", "dist", "index.html"));
   }

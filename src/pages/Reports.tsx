@@ -20,46 +20,12 @@ const Reports = () => {
   });
   const [comparisonPeriod, setComparisonPeriod] = useState<"previous" | "year-ago">("previous");
 
-  // Profit per product category data
-  const categoryProfitData = [
-    { category: "Snacks & Chips", revenue: 12500, cost: 7800, profit: 4700, margin: 37.6, prevRevenue: 11200, prevProfit: 4100 },
-    { category: "Beverages", revenue: 18200, cost: 11400, profit: 6800, margin: 37.4, prevRevenue: 16800, prevProfit: 6200 },
-    { category: "Dairy & Eggs", revenue: 9800, cost: 7200, profit: 2600, margin: 26.5, prevRevenue: 10200, prevProfit: 2800 },
-    { category: "Personal Care", revenue: 8400, cost: 5100, profit: 3300, margin: 39.3, prevRevenue: 7800, prevProfit: 3000 },
-    { category: "Household Items", revenue: 6200, cost: 3900, profit: 2300, margin: 37.1, prevRevenue: 6000, prevProfit: 2200 },
-    { category: "Frozen Foods", revenue: 5600, cost: 3800, profit: 1800, margin: 32.1, prevRevenue: 5400, prevProfit: 1700 },
-  ];
-
-  // Fast-moving vs slow-moving items
-  const inventoryTurnoverData = [
-    { product: "Coca-Cola 500ml", sold: 450, stock: 120, turnover: 3.75, status: "fast", daysToStockout: 3 },
-    { product: "Lay's Chips", sold: 380, stock: 95, turnover: 4.0, status: "fast", daysToStockout: 2 },
-    { product: "Instant Noodles", sold: 340, stock: 180, turnover: 1.89, status: "fast", daysToStockout: 5 },
-    { product: "Milk 1L", sold: 280, stock: 85, turnover: 3.29, status: "fast", daysToStockout: 3 },
-    { product: "Bread Loaf", sold: 250, stock: 60, turnover: 4.17, status: "fast", daysToStockout: 2 },
-    { product: "Energy Drinks", sold: 120, stock: 180, turnover: 0.67, status: "medium", daysToStockout: 15 },
-    { product: "Canned Goods", sold: 65, stock: 240, turnover: 0.27, status: "slow", daysToStockout: 37 },
-    { product: "Gourmet Snacks", sold: 45, stock: 190, turnover: 0.24, status: "slow", daysToStockout: 42 },
-  ];
-
-  // Inventory shortage impact on sales
-  const shortageImpactData = [
-    { week: "Week 1", potentialSales: 8500, actualSales: 8500, lostSales: 0, prevPotentialSales: 8200, prevActualSales: 8200 },
-    { week: "Week 2", potentialSales: 9200, actualSales: 7800, lostSales: 1400, prevPotentialSales: 8900, prevActualSales: 7500 },
-    { week: "Week 3", potentialSales: 8900, actualSales: 6500, lostSales: 2400, prevPotentialSales: 8600, prevActualSales: 6800 },
-    { week: "Week 4", potentialSales: 9500, actualSales: 9500, lostSales: 0, prevPotentialSales: 9200, prevActualSales: 9200 },
-  ];
-
-  // Stock prediction data
-  const stockPredictionData = [
-    { day: "Day 1", current: 120, predicted: 120 },
-    { day: "Day 2", current: null, predicted: 96 },
-    { day: "Day 3", current: null, predicted: 72 },
-    { day: "Day 4", current: null, predicted: 48 },
-    { day: "Day 5", current: null, predicted: 24 },
-    { day: "Day 6", current: null, predicted: 12 },
-    { day: "Day 7", current: null, predicted: 0 },
-  ];
+  // All data now comes from database - these will be populated from real queries
+  // TODO: Add database queries for category profit, inventory turnover, shortage impact, stock prediction
+  const categoryProfitData: any[] = [];
+  const inventoryTurnoverData: any[] = [];
+  const shortageImpactData: any[] = [];
+  const stockPredictionData: any[] = [];
 
   const COLORS = {
     fast: "#133020",

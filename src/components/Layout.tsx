@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { AppSidebar } from "@/components/AppSidebar";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { Outlet, useNavigate } from "react-router-dom";
+import { ModeToggle } from "@/components/ModeToggle";
 
 const Layout = () => {
   const navigate = useNavigate();

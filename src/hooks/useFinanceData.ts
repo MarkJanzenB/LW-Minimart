@@ -10,30 +10,20 @@ export const financeQueryKeys = {
 export const useOverviewMetrics = () => {
   return useQuery({
     queryKey: financeQueryKeys.overview,
-    queryFn: async () => {
-      // Simulate slight latency for better UX testing
-      await new Promise((resolve) => setTimeout(resolve, 300));
-      return getMockOverviewMetrics();
-    },
+    queryFn: () => getMockOverviewMetrics(),
   });
 };
 
 export const useCashflow = () => {
   return useQuery({
     queryKey: financeQueryKeys.cashflow,
-    queryFn: async () => {
-      await new Promise((resolve) => setTimeout(resolve, 300));
-      return getMockCashflow();
-    },
+    queryFn: () => getMockCashflow(),
   });
 };
 
 export const useTransactions = () => {
   return useQuery({
     queryKey: financeQueryKeys.transactions,
-    queryFn: async () => {
-      await new Promise((resolve) => setTimeout(resolve, 300));
-      return getMockTransactions();
-    },
+    queryFn: () => getMockTransactions(),
   });
 };
