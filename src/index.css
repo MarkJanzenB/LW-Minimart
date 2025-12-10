@@ -258,6 +258,25 @@ All colors MUST be HSL.
   .row-in-stock:hover {
     @apply bg-green-100;
   }
+  /* Dark mode variants for inventory row highlights */
+  .dark .row-expired {
+    @apply bg-red-900/40;
+  }
+  .dark .row-expired:hover {
+    @apply bg-red-800/60;
+  }
+  .dark .row-low-stock {
+    @apply bg-orange-900/30;
+  }
+  .dark .row-low-stock:hover {
+    @apply bg-orange-800/50;
+  }
+  .dark .row-in-stock {
+    @apply bg-emerald-900/25;
+  }
+  .dark .row-in-stock:hover {
+    @apply bg-emerald-800/40;
+  }
   .glass-modal {
     @apply bg-card rounded-2xl shadow-lg;
   }

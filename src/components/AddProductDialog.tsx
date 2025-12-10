@@ -115,7 +115,7 @@ export function AddProductDialog({ isOpen, onClose, onProductAdded }: AddProduct
 
       if (name === 'cost') {
         const costNumber = parseFloat(value) || 0;
-        const sellingPrice = costNumber + costNumber * 0.5;
+        const sellingPrice = costNumber + costNumber * 0.2;
         updated.price = sellingPrice.toFixed(2);
       }
 
@@ -347,6 +347,25 @@ export function AddProductDialog({ isOpen, onClose, onProductAdded }: AddProduct
           );
           
           if (product) {
+            // If existing stock is expired, move it to spoilage before restocking
+            try {
+              const api = (window as any).api;
+              const today = new Date();
+              today.setHours(0, 0, 0, 0);
+              const expiryString = product.expiryDate || product.expiry_date;
+              const existingQty = Number(product.stock ?? product.stock_quantity ?? 0);
+
+              if (api?.spoilage?.moveToSpoilage && expiryString && existingQty > 0) {
+                const expiry = new Date(expiryString);
+                expiry.setHours(0, 0, 0, 0);
+                if (expiry <= today) {
+                  await api.spoilage.moveToSpoilage(product.id, existingQty, 'Expired');
+                }
+              }
+            } catch (err) {
+              console.error('Error moving expired stock to spoilage before restock:', err);
+            }
+
             const batchResponse = await (window as any).api.products.addBatch(product.id, {
               batchNo: generatedBatchNo,
               stock: additionalStock,
@@ -393,6 +412,20 @@ export function AddProductDialog({ isOpen, onClose, onProductAdded }: AddProduct
         }
       } else {
         // Fallback to IndexedDB
+        try {
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          if (existingProduct.expiryDate) {
+            const expiry = new Date(existingProduct.expiryDate);
+            expiry.setHours(0, 0, 0, 0);
+            if (expiry <= today && existingProduct.stock > 0) {
+              await dbService.moveProductToSpoilage(existingProduct, 'Expired');
+            }
+          }
+        } catch (err) {
+          console.error('Error moving expired local stock to spoilage before restock:', err);
+        }
+
         const restockSku = `${existingProduct.sku}-RS-${Date.now()}`;
         await dbService.addProduct({
           name: existingProduct.name,
@@ -651,8 +684,8 @@ export function AddProductDialog({ isOpen, onClose, onProductAdded }: AddProduct
                 id="restock-batchNo"
                 name="batchNo"
                 value={restockData.batchNo}
-                onChange={handleRestockFieldChange}
-                placeholder="e.g., BT-2024-001"
+                readOnly
+                placeholder="Auto-generated on restock"
               />
             </div>
             <div className="space-y-2">

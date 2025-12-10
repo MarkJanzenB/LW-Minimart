@@ -21,7 +21,7 @@ export const ModeToggle = () => {
       aria-label={label}
     >
       {mounted && currentTheme === "light" ? (
-        <Moon className="h-5 w-5" />
+        <Moon className="h-5 w-5 text-black" />
       ) : (
         <Sun className="h-5 w-5" />
       )}

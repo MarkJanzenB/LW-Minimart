@@ -63,7 +63,11 @@ export const AppLayout = () => {
               className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border bg-background text-foreground hover:bg-accent hover:text-accent-foreground text-xs"
               aria-label="Toggle color theme"
             >
-              {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+              {theme === "dark" ? (
+                <Sun className="h-4 w-4" />
+              ) : (
+                <Moon className="h-4 w-4 text-black" />
+              )}
             </button>
           </div>
         </header>
