@@ -457,6 +457,7 @@ const Inventory = () => {
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [showLowStockOnly, setShowLowStockOnly] = useState(false);
   const [showExpiredOnly, setShowExpiredOnly] = useState(false);
+  const [showInStockOnly, setShowInStockOnly] = useState(false);
   const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
   const [isCategoryOpen, setIsCategoryOpen] = useState(false);
   const [sortKey, setSortKey] = useState<SortKey>("id");
@@ -715,6 +716,11 @@ const Inventory = () => {
       data = data.filter((item) => item.status === "Expired");
     }
 
+    // In-stock filter (exclude out-of-stock items when active)
+    if (showInStockOnly) {
+      data = data.filter((item) => item.status === "In Stock");
+    }
+
     // Sort
     data.sort((a, b) => {
       const aVal = a[sortKey];
@@ -729,7 +735,7 @@ const Inventory = () => {
     });
 
     return data;
-  }, [searchTerm, selectedCategory, showLowStockOnly, showExpiredOnly, sortKey, sortDirection, groupedData]);
+  }, [searchTerm, selectedCategory, showLowStockOnly, showExpiredOnly, showInStockOnly, sortKey, sortDirection, groupedData]);
 
   const paginatedData = useMemo(() => {
     const startIndex = (currentPage - 1) * itemsPerPage;
@@ -1062,6 +1068,7 @@ const Inventory = () => {
             onClick={() => {
               setShowLowStockOnly(true);
               setShowExpiredOnly(false);
+              setShowInStockOnly(false);
               setSelectedCategory("All");
               setSearchTerm("");
             }}
@@ -1084,6 +1091,7 @@ const Inventory = () => {
             onClick={() => {
               setShowLowStockOnly(false);
               setShowExpiredOnly(false);
+              setShowInStockOnly(true);
               setSelectedCategory("All");
               setSearchTerm("");
             }}
@@ -1106,6 +1114,7 @@ const Inventory = () => {
             onClick={() => {
               setShowLowStockOnly(false);
               setShowExpiredOnly(true);
+              setShowInStockOnly(false);
               setSelectedCategory("All");
               setSearchTerm("");
             }}
@@ -1147,6 +1156,7 @@ const Inventory = () => {
                 onClick={() => {
                   setShowLowStockOnly(!showLowStockOnly);
                   setShowExpiredOnly(false);
+                  setShowInStockOnly(false);
                 }}
                 className={`glass-button flex items-center gap-2 ${
                   showLowStockOnly ? "bg-inventory-warning/30 border-inventory-warning" : ""
