@@ -111,7 +111,7 @@ CREATE TABLE IF NOT EXISTS sales (
     reference_number TEXT
 );
 
-CREATE TABLE sale_items (
+CREATE TABLE IF NOT EXISTS sale_items (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     sale_id INTEGER NOT NULL,
     product_id INTEGER NOT NULL,
