@@ -10,7 +10,8 @@ import {
   deleteProduct,
   upsertInventoryProducts, 
   getInventoryMirror, 
-  deleteInventoryProduct 
+  deleteInventoryProduct,
+  updateProductBatchesExpiry,
 } from '../db/queries';
 
 export function registerProductsIpc() {
@@ -102,6 +103,11 @@ export function registerProductsIpc() {
         updateData.image_url = productData.imageUrl ?? productData.image_url;
       }
       if (productData.is_active !== undefined) updateData.is_active = productData.is_active;
+      // If expiry date is provided, update all batches for this product
+      const expiryDate = productData.expiryDate ?? productData.expiry_date;
+      if (expiryDate !== undefined) {
+        updateProductBatchesExpiry(productId, expiryDate || null);
+      }
 
       const result = updateProduct(productId, updateData);
       return { success: true, data: result };

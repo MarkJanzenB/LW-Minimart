@@ -317,10 +317,11 @@ export function getInventoryItems() {
       MAX(b.expiry_date) as expiryDate,
       MAX(b.batch_code) as batchNo,
       CASE 
-        WHEN MAX(b.expiry_date) < date('now') THEN 'Expired'
+        WHEN MAX(b.expiry_date) <= date('now') AND MAX(b.expiry_date) IS NOT NULL THEN 'Expired'
         WHEN COALESCE(SUM(b.quantity), 0) <= p.reorder_threshold THEN 'Low Stock'
         ELSE 'In Stock'
       END as status
+
     FROM products p
     LEFT JOIN categories c ON p.category_id = c.id
     LEFT JOIN batches b ON p.id = b.product_id
@@ -329,6 +330,16 @@ export function getInventoryItems() {
     ORDER BY p.name
   `);
   return stmt.all();
+}
+
+// Update expiry date for all batches of a product
+export function updateProductBatchesExpiry(productId: number, expiryDate: string | null) {
+  const stmt = db.prepare(`
+    UPDATE batches
+    SET expiry_date = ?
+    WHERE product_id = ?
+  `);
+  stmt.run(expiryDate, productId);
 }
 
 // Transactions queries
@@ -600,9 +611,6 @@ export function getDashboardMetrics() {
     },
     recentTransactions: recentTransactions || [],
     topProducts: topProducts || [],
-    inventoryByCategory: inventoryByCategory || [],
-  };
-}
 
 // Create or update product in SQLite (single source of truth)
 export function createProduct(productData: {
@@ -616,6 +624,7 @@ export function createProduct(productData: {
   purchase_price: number;
   selling_price: number;
   reorder_threshold?: number;
+  image_url?: string;
   batch_code?: string;
   quantity?: number;
   expiry_date?: string;
@@ -688,6 +697,7 @@ export function updateProduct(productId: number, productData: {
   purchase_price?: number;
   selling_price?: number;
   reorder_threshold?: number;
+  image_url?: string;
   is_active?: number;
 }) {
   const updates: string[] = [];
