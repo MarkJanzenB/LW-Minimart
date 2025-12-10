@@ -142,185 +142,6 @@ try {
 // No default users - users must be created through owner-setup
 registerAuthIpc(db);
 
-// POS / Transactions IPC
-ipcMain.handle("transactions:getAll", (_event, limit, offset) => {
-  try {
-    const stmt = db.prepare(`
-      SELECT 
-        t.id,
-        t.transaction_id,
-        t.subtotal,
-        t.tax_amount,
-        t.total_amount,
-        t.payment_method,
-        t.created_by,
-        t.created_at
-      FROM transactions t
-      ORDER BY t.created_at DESC
-      LIMIT COALESCE(?, -1) OFFSET COALESCE(?, 0)
-    `);
-    const rows = stmt.all(limit ?? -1, offset ?? 0);
-    return { success: true, data: rows };
-  } catch (error) {
-    console.error("Failed to get transactions:", error);
-    return { success: false, message: error.message };
-  }
-});
-
-ipcMain.handle("transactions:getById", (_event, transactionId) => {
-  try {
-    const txnStmt = db.prepare(`
-      SELECT 
-        t.id,
-        t.transaction_id,
-        t.subtotal,
-        t.tax_amount,
-        t.total_amount,
-        t.payment_method,
-        t.created_by,
-        t.created_at
-      FROM transactions t
-      WHERE t.transaction_id = ?
-      LIMIT 1
-    `);
-    const itemStmt = db.prepare(`
-      SELECT 
-        ti.id,
-        ti.product_id,
-        ti.quantity,
-        ti.unit_price,
-        ti.subtotal
-      FROM transaction_items ti
-      JOIN transactions t ON t.id = ti.transaction_id
-      WHERE t.transaction_id = ?
-    `);
-    const txn = txnStmt.get(transactionId);
-    if (!txn) return { success: true, data: null };
-    const items = itemStmt.all(transactionId);
-    return { success: true, data: { ...txn, items } };
-  } catch (error) {
-    console.error("Failed to get transaction:", error);
-    return { success: false, message: error.message };
-  }
-});
-
-ipcMain.handle("transactions:create", (_event, transactionData) => {
-  try {
-    const insertTxn = db.prepare(`
-      INSERT INTO transactions (
-        transaction_id,
-        subtotal,
-        tax_amount,
-        total_amount,
-        payment_method,
-        created_by
-      ) VALUES (?, ?, ?, ?, ?, ?)
-    `);
-    const txnResult = insertTxn.run(
-      transactionData.transaction_id,
-      transactionData.subtotal ?? 0,
-      transactionData.tax_amount ?? 0,
-      transactionData.total_amount ?? 0,
-      transactionData.payment_method ?? "cash",
-      transactionData.created_by ?? null
-    );
-
-    const txnId = txnResult.lastInsertRowid;
-
-    if (Array.isArray(transactionData.items)) {
-      const insertItem = db.prepare(`
-        INSERT INTO transaction_items (
-          transaction_id,
-          product_id,
-          quantity,
-          unit_price,
-          subtotal
-        ) VALUES (?, ?, ?, ?, ?)
-      `);
-      const updateBatch = db.prepare(`
-        UPDATE batches
-        SET quantity = quantity - ?
-        WHERE id = ?
-      `);
-      const getBatches = db.prepare(`
-        SELECT id, quantity 
-        FROM batches 
-        WHERE product_id = ?
-        AND quantity > 0
-        ORDER BY expiry_date ASC, created_at ASC
-      `);
-
-      for (const item of transactionData.items) {
-        insertItem.run(
-          txnId,
-          item.product_id ?? item.id ?? null,
-          item.quantity ?? 0,
-          item.unit_price ?? item.price ?? 0,
-          item.subtotal ?? (item.price ?? 0) * (item.quantity ?? 0)
-        );
-
-        // FIFO stock deduction
-        let qty = item.quantity ?? 0;
-        const batches = getBatches.all(item.product_id ?? item.id ?? null);
-        for (const batch of batches) {
-          if (qty <= 0) break;
-          const deduct = Math.min(qty, batch.quantity);
-          updateBatch.run(deduct, batch.id);
-          qty -= deduct;
-        }
-      }
-    }
-
-    return { success: true, data: { id: txnId, transaction_id: transactionData.transaction_id } };
-  } catch (error) {
-    console.error("Failed to create transaction:", error);
-    return { success: false, message: error.message };
-  }
-});
-
-ipcMain.handle("dashboard:getMetrics", () => {
-  try {
-    const metrics = db.prepare(`
-      SELECT 
-        COALESCE(SUM(total_amount),0) AS totalRevenue,
-        COUNT(*) AS totalTransactions,
-        COALESCE(SUM(CASE WHEN DATE(created_at) = DATE('now') THEN total_amount ELSE 0 END),0) AS todayRevenue,
-        COUNT(CASE WHEN DATE(created_at) = DATE('now') THEN 1 END) AS todayTransactions
-      FROM transactions
-    `).get();
-
-    const inv = db.prepare(`
-      SELECT 
-        COUNT(*) AS totalProducts,
-        COALESCE(SUM(quantity),0) AS totalStock
-      FROM batches
-    `).get();
-
-    const lowStock = db.prepare(`
-      SELECT COUNT(*) AS lowStock
-      FROM products p
-      JOIN batches b ON b.product_id = p.id
-      WHERE b.quantity <= COALESCE(p.reorder_threshold, 10)
-    `).get();
-
-    return {
-      success: true,
-      data: {
-        totalRevenue: metrics.totalRevenue,
-        totalTransactions: metrics.totalTransactions,
-        todayRevenue: metrics.todayRevenue,
-        todayTransactions: metrics.todayTransactions,
-        totalProducts: inv.totalProducts,
-        totalStock: inv.totalStock,
-        lowStock: lowStock.lowStock,
-      },
-    };
-  } catch (error) {
-    console.error("Failed to get dashboard metrics:", error);
-    return { success: false, message: error.message };
-  }
-});
-
 // Inventory mirror IPC
 ipcMain.handle("inventory:syncFromClient", (_event, products) => {
   const deleteAll = db.prepare("DELETE FROM inventory_mirror");
@@ -1031,6 +852,151 @@ ipcMain.handle("dashboard:getMetrics", () => {
     };
   } catch (error) {
     console.error("Failed to get dashboard metrics:", error);
+    return { success: false, message: error.message };
+  }
+});
+
+// ---- Spoilage IPC ----
+ipcMain.handle("spoilage:moveToSpoilage", (_event, productId, quantity, reason = 'Expired') => {
+  try {
+    const result = db.transaction(() => {
+      // Get product details
+      const getProduct = db.prepare(`
+        SELECT p.*, b.batch_code, b.expiry_date, b.cost_per_unit 
+        FROM products p 
+        LEFT JOIN batches b ON p.id = b.product_id 
+        WHERE p.id = ? 
+        LIMIT 1
+      `);
+      const product = getProduct.get(productId);
+      
+      if (!product) {
+        throw new Error('Product not found');
+      }
+
+      const costPerUnit = product.cost_per_unit || product.purchase_price || 0;
+      const totalCost = costPerUnit * quantity;
+      const now = new Date().toISOString();
+
+      // Insert spoilage record
+      const insertSpoilage = db.prepare(`
+        INSERT INTO spoilage (
+          product_id, product_name, sku, batch_code, quantity, 
+          cost_per_unit, total_cost, expiry_date, spoiled_at, reason
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+      
+      const spoilageResult = insertSpoilage.run(
+        productId,
+        product.name,
+        product.sku || null,
+        product.batch_code || null,
+        quantity,
+        costPerUnit,
+        totalCost,
+        product.expiry_date || null,
+        now,
+        reason
+      );
+
+      // Insert expense record
+      const insertExpense = db.prepare(`
+        INSERT INTO expenses (type, category, amount, date, reference_id, notes)
+        VALUES ('EXPENSE', 'Spoilage', ?, ?, ?, ?)
+      `);
+      
+      insertExpense.run(
+        totalCost,
+        now,
+        spoilageResult.lastInsertRowid.toString(),
+        `Spoilage for ${product.name}${product.batch_code ? ` (${product.batch_code})` : ''}`
+      );
+
+      // Update batch quantity (reduce stock) - FIFO approach
+      const getBatches = db.prepare(`
+        SELECT id, quantity, batch_code
+        FROM batches 
+        WHERE product_id = ? AND quantity > 0
+        ORDER BY expiry_date ASC, created_at ASC
+      `);
+      const updateBatch = db.prepare(`
+        UPDATE batches 
+        SET quantity = quantity - ? 
+        WHERE id = ?
+      `);
+      const deleteEmptyBatch = db.prepare(`
+        DELETE FROM batches 
+        WHERE id = ? AND quantity <= 0
+      `);
+
+      let remainingQty = quantity;
+      const batches = getBatches.all(productId);
+      
+      for (const batch of batches) {
+        if (remainingQty <= 0) break;
+        const deduct = Math.min(remainingQty, batch.quantity);
+        updateBatch.run(deduct, batch.id);
+        deleteEmptyBatch.run(batch.id);
+        remainingQty -= deduct;
+      }
+
+      return { id: spoilageResult.lastInsertRowid };
+    })();
+    
+    return { success: true, data: result };
+  } catch (error) {
+    console.error("Failed to move product to spoilage:", error);
+    return { success: false, message: error.message };
+  }
+});
+
+ipcMain.handle("spoilage:getAll", (_event, limit, offset) => {
+  try {
+    const limitClause = limit ? `LIMIT ${limit}` : '';
+    const offsetClause = offset ? `OFFSET ${offset}` : '';
+    
+    const sql = `
+      SELECT 
+        s.id,
+        s.product_id as productId,
+        s.product_name as productName,
+        s.sku,
+        s.batch_code as batchNo,
+        s.quantity,
+        s.cost_per_unit as costPerUnit,
+        s.total_cost as totalCost,
+        s.expiry_date as expiryDate,
+        s.spoiled_at as spoiledAt,
+        s.reason
+      FROM spoilage s
+      ORDER BY s.spoiled_at DESC
+      ${limitClause} ${offsetClause}
+    `;
+    
+    const rows = db.prepare(sql).all();
+    return { success: true, data: rows };
+  } catch (error) {
+    console.error("Failed to get spoilage history:", error);
+    return { success: false, message: error.message };
+  }
+});
+
+ipcMain.handle("spoilage:getStats", () => {
+  try {
+    const totalRecords = db.prepare('SELECT COUNT(*) as count FROM spoilage').get();
+    const totalQuantity = db.prepare('SELECT SUM(quantity) as total FROM spoilage').get();
+    const totalCost = db.prepare('SELECT SUM(total_cost) as total FROM spoilage').get();
+    
+    return {
+      success: true,
+      data: {
+        totalRecords: totalRecords?.count || 0,
+        totalQuantity: totalQuantity?.total || 0,
+        totalCost: totalCost?.total || 0,
+      }
+    };
+  } catch (error) {
+    console.error("Failed to get spoilage stats:", error);
     return { success: false, message: error.message };
   }
 });
