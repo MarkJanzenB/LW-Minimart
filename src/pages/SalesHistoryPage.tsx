@@ -23,34 +23,65 @@ function SalesHistoryPage() {
   const [loadingDetail, setLoadingDetail] = useState(false);
 
   // Load persisted transactions from Electron (SQLite)
+  const loadTransactions = async () => {
+    try {
+      const api = (window as any).api;
+      if (!api?.transactions?.getAll) return;
+      const res = await api.transactions.getAll();
+      if (res.success && Array.isArray(res.data) && res.data.length > 0) {
+        const mapped = res.data.map((row: any) => ({
+          id: (row.transaction_id ?? row.id)?.toString?.() ?? '',
+          date: row.created_at ? new Date(row.created_at) : new Date(),
+          items: [],
+          subtotal: Number(row.subtotal ?? 0),
+          tax: Number(row.tax_amount ?? 0),
+          total: Number(row.total_amount ?? 0),
+          cashReceived: row.cash_received ?? undefined,
+          change: row.change ?? undefined,
+          paymentMethod: row.payment_method === 'qr' ? 'qr' : 'cash',
+          referenceNumber: row.reference_number ?? undefined,
+          status: 'Completed' as const,
+        }));
+        setTransactions(mapped);
+      } else if (res.success && Array.isArray(res.data) && res.data.length === 0) {
+        // Clear transactions if database returns empty array
+        setTransactions([]);
+      }
+    } catch (error) {
+      console.error('Failed to load sales history:', error);
+    }
+  };
+
   useEffect(() => {
-    const load = async () => {
-      try {
-        const api = (window as any).api;
-        if (!api?.transactions?.getAll) return;
-        const res = await api.transactions.getAll();
-        if (res.success && Array.isArray(res.data) && res.data.length > 0) {
-          const mapped = res.data.map((row: any) => ({
-            id: (row.transaction_id ?? row.id)?.toString?.() ?? '',
-            date: row.created_at ? new Date(row.created_at) : new Date(),
-            items: [],
-            subtotal: Number(row.subtotal ?? 0),
-            tax: Number(row.tax_amount ?? 0),
-            total: Number(row.total_amount ?? 0),
-            cashReceived: row.cash_received ?? undefined,
-            change: row.change ?? undefined,
-            paymentMethod: row.payment_method === 'qr' ? 'qr' : 'cash',
-            referenceNumber: row.reference_number ?? undefined,
-            status: 'Completed' as const,
-          }));
-          setTransactions(mapped);
-        }
-      } catch (error) {
-        console.error('Failed to load sales history:', error);
+    void loadTransactions();
+  }, [setTransactions]);
+
+  // Refresh transactions when page becomes visible or gains focus
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        void loadTransactions();
       }
     };
-    void load();
+
+    const handleFocus = () => {
+      void loadTransactions();
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleFocus);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleFocus);
+    };
   }, [setTransactions]);
+
+  // Also listen to transaction store updates (when transactions are added in POS)
+  useEffect(() => {
+    // Refresh when store transactions change (new transaction added)
+    void loadTransactions();
+  }, [transactions.length, setTransactions]);
 
   const [searchTerm, setSearchTerm] = useState('');
   const [paymentFilter, setPaymentFilter] = useState<'all' | 'cash' | 'qr'>('all');

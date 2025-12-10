@@ -117,7 +117,8 @@ export function AddProductDialog({ isOpen, onClose, onProductAdded }: AddProduct
         [name]: value,
       };
 
-      if (name === 'cost') {
+      // Auto-calculate selling price from cost only if price field is empty or hasn't been manually edited
+      if (name === 'cost' && (!prev.price || prev.price === (parseFloat(prev.cost || '0') * 1.5).toFixed(2))) {
         const costNumber = parseFloat(value) || 0;
         const sellingPrice = costNumber + costNumber * 0.5;
         updated.price = sellingPrice.toFixed(2);
@@ -430,15 +431,19 @@ export function AddProductDialog({ isOpen, onClose, onProductAdded }: AddProduct
   return (
     <>
       <Dialog open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Add New Product</DialogTitle>
+        <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col p-0">
+        <DialogHeader className="px-6 pt-6 pb-4 border-b border-border flex-shrink-0">
+          <DialogTitle className="text-2xl font-bold">Add New Product</DialogTitle>
+          <p className="text-sm text-muted-foreground mt-1">Fill in the product details below. Fields marked with <span className="text-red-500">*</span> are required.</p>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="flex-1 overflow-y-auto px-6 py-4 scrollbar-thin scrollbar-thumb-muted scrollbar-track-transparent">
+          <form onSubmit={handleSubmit} className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-2">
-              <Label htmlFor="name">Product Name *</Label>
+              <Label htmlFor="name">
+                Product Name <span className="text-red-500">*</span>
+              </Label>
               <Input
                 id="name"
                 name="name"
@@ -464,14 +469,17 @@ export function AddProductDialog({ isOpen, onClose, onProductAdded }: AddProduct
             </div>
             
             <div className="space-y-2">
-              <Label htmlFor="sku">SKU *</Label>
+              <Label htmlFor="sku">
+                SKU <span className="text-red-500">*</span>
+              </Label>
               <Input
                 id="sku"
                 name="sku"
                 value={formData.sku}
-                readOnly
+                disabled
                 required
                 placeholder="Auto-generated based on category"
+                className="bg-muted cursor-not-allowed"
               />
             </div>
             
@@ -506,7 +514,9 @@ export function AddProductDialog({ isOpen, onClose, onProductAdded }: AddProduct
             </div>
             
             <div className="space-y-2">
-              <Label htmlFor="cost">Cost (₱) *</Label>
+              <Label htmlFor="cost">
+                Cost (₱) <span className="text-red-500">*</span>
+              </Label>
               <Input
                 id="cost"
                 name="cost"
@@ -521,7 +531,9 @@ export function AddProductDialog({ isOpen, onClose, onProductAdded }: AddProduct
             </div>
             
             <div className="space-y-2">
-              <Label htmlFor="price">Selling Price (₱) *</Label>
+              <Label htmlFor="price">
+                Selling Price (₱) <span className="text-red-500">*</span>
+              </Label>
               <Input
                 id="price"
                 name="price"
@@ -529,14 +541,19 @@ export function AddProductDialog({ isOpen, onClose, onProductAdded }: AddProduct
                 step="0.01"
                 min="0"
                 value={formData.price}
-                readOnly
+                onChange={handleChange}
                 required
-                placeholder="Auto-calculated from cost"
+                placeholder="Enter selling price or auto-calculated from cost"
               />
+              <p className="text-xs text-muted-foreground">
+                Auto-calculated as 150% of cost. You can edit this value.
+              </p>
             </div>
             
             <div className="space-y-2">
-              <Label htmlFor="stock">Current Stock *</Label>
+              <Label htmlFor="stock">
+                Current Stock <span className="text-red-500">*</span>
+              </Label>
               <Input
                 id="stock"
                 name="stock"
@@ -579,8 +596,9 @@ export function AddProductDialog({ isOpen, onClose, onProductAdded }: AddProduct
                 id="batchNo"
                 name="batchNo"
                 value={formData.batchNo}
-                readOnly
+                disabled
                 placeholder="Auto-generated on save"
+                className="bg-muted cursor-not-allowed"
               />
             </div>
             
@@ -595,27 +613,44 @@ export function AddProductDialog({ isOpen, onClose, onProductAdded }: AddProduct
                   onChange={handleChange}
                   placeholder="e.g., 123456789012"
                 />
-                <button
+                <Button
                   type="button"
-                  aria-label="Scan barcode"
-                  className="glass-button p-2 w-10 h-10 flex items-center justify-center"
+                  variant="outline"
+                  className="flex items-center gap-2"
                   onClick={() => setIsScannerOpen(true)}
-                  title="Scan barcode"
                 >
-                  <Scan className="w-5 h-5" />
-                </button>
+                  <Scan className="w-4 h-4" />
+                  <span>Scan</span>
+                </Button>
               </div>
             </div>
             
             <div className="space-y-2 md:col-span-2">
               <Label htmlFor="imageUrl">Product Image (optional)</Label>
-              <Input
-                id="imageUrl"
-                name="imageUrl"
-                type="file"
-                accept="image/*"
-                onChange={handleImageChange}
-              />
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center gap-4">
+                  <Input
+                    id="imageUrl"
+                    name="imageUrl"
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageChange}
+                    className="cursor-pointer"
+                  />
+                  {formData.imageUrl && (
+                    <div className="flex-shrink-0">
+                      <img 
+                        src={formData.imageUrl} 
+                        alt="Preview" 
+                        className="w-20 h-20 object-cover rounded-md border border-border"
+                      />
+                    </div>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Upload a product image. Supported formats: JPG, PNG, GIF
+                </p>
+              </div>
             </div>
           </div>
 
@@ -632,7 +667,8 @@ export function AddProductDialog({ isOpen, onClose, onProductAdded }: AddProduct
               {isLoading ? 'Adding...' : 'Add Product'}
             </Button>
           </DialogFooter>
-        </form>
+          </form>
+        </div>
       </DialogContent>
     </Dialog>
     <BarcodeScannerModal

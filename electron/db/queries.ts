@@ -796,3 +796,113 @@ export function deleteProduct(productId: number) {
   const stmt = db.prepare('UPDATE products SET is_active = 0 WHERE id = ?');
   stmt.run(productId);
 }
+
+// Spoilage functions
+export function moveProductToSpoilage(productId: number, quantity: number, reason: string = 'Expired') {
+  return db.transaction(() => {
+    // Get product details
+    const getProduct = db.prepare('SELECT p.*, b.batch_code, b.expiry_date, b.cost_per_unit FROM products p LEFT JOIN batches b ON p.id = b.product_id WHERE p.id = ? LIMIT 1');
+    const product = getProduct.get(productId) as any;
+    
+    if (!product) {
+      throw new Error('Product not found');
+    }
+
+    const costPerUnit = product.cost_per_unit || product.purchase_price || 0;
+    const totalCost = costPerUnit * quantity;
+    const now = new Date().toISOString();
+
+    // Insert spoilage record
+    const insertSpoilage = db.prepare(`
+      INSERT INTO spoilage (
+        product_id, product_name, sku, batch_code, quantity, 
+        cost_per_unit, total_cost, expiry_date, spoiled_at, reason
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    
+    const spoilageResult = insertSpoilage.run(
+      productId,
+      product.name,
+      product.sku || null,
+      product.batch_code || null,
+      quantity,
+      costPerUnit,
+      totalCost,
+      product.expiry_date || null,
+      now,
+      reason
+    );
+
+    // Insert expense record
+    const insertExpense = db.prepare(`
+      INSERT INTO expenses (type, category, amount, date, reference_id, notes)
+      VALUES ('EXPENSE', 'Spoilage', ?, ?, ?, ?)
+    `);
+    
+    insertExpense.run(
+      totalCost,
+      now,
+      spoilageResult.lastInsertRowid.toString(),
+      `Spoilage for ${product.name}${product.batch_code ? ` (${product.batch_code})` : ''}`
+    );
+
+    // Update batch quantity (reduce stock)
+    if (product.batch_code) {
+      const updateBatch = db.prepare('UPDATE batches SET quantity = quantity - ? WHERE product_id = ? AND batch_code = ?');
+      updateBatch.run(quantity, productId, product.batch_code);
+      
+      // Delete batch if quantity reaches 0
+      const deleteEmptyBatch = db.prepare('DELETE FROM batches WHERE product_id = ? AND batch_code = ? AND quantity <= 0');
+      deleteEmptyBatch.run(productId, product.batch_code);
+    }
+
+    return { id: spoilageResult.lastInsertRowid as number };
+  })();
+}
+
+export function getSpoilageHistory(limit?: number, offset?: number) {
+  const limitClause = limit ? `LIMIT ${limit}` : '';
+  const offsetClause = offset ? `OFFSET ${offset}` : '';
+  
+  const sql = `
+    SELECT 
+      s.id,
+      s.product_id as productId,
+      s.product_name as productName,
+      s.sku,
+      s.batch_code as batchNo,
+      s.quantity,
+      s.cost_per_unit as costPerUnit,
+      s.total_cost as totalCost,
+      s.expiry_date as expiryDate,
+      s.spoiled_at as spoiledAt,
+      s.reason
+    FROM spoilage s
+    ORDER BY s.spoiled_at DESC
+    ${limitClause} ${offsetClause}
+  `;
+  
+  try {
+    return db.prepare(sql).all();
+  } catch (err) {
+    console.error('Error getting spoilage history', err);
+    throw err;
+  }
+}
+
+export function getSpoilageStats() {
+  try {
+    const totalRecords = db.prepare('SELECT COUNT(*) as count FROM spoilage').get() as { count: number };
+    const totalQuantity = db.prepare('SELECT SUM(quantity) as total FROM spoilage').get() as { total: number | null };
+    const totalCost = db.prepare('SELECT SUM(total_cost) as total FROM spoilage').get() as { total: number | null };
+    
+    return {
+      totalRecords: totalRecords.count || 0,
+      totalQuantity: totalQuantity.total || 0,
+      totalCost: totalCost.total || 0,
+    };
+  } catch (err) {
+    console.error('Error getting spoilage stats', err);
+    throw err;
+  }
+}

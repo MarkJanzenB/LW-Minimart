@@ -149,3 +149,37 @@ CREATE TABLE IF NOT EXISTS transaction_items (
 CREATE INDEX IF NOT EXISTS idx_transactions_created_at ON transactions(created_at);
 CREATE INDEX IF NOT EXISTS idx_transaction_items_transaction ON transaction_items(transaction_id);
 CREATE INDEX IF NOT EXISTS idx_transaction_items_product ON transaction_items(product_id);
+
+-- Spoilage table
+CREATE TABLE IF NOT EXISTS spoilage (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    product_id INTEGER NOT NULL,
+    product_name TEXT NOT NULL,
+    sku TEXT,
+    batch_code TEXT,
+    quantity INTEGER NOT NULL DEFAULT 0,
+    cost_per_unit NUMERIC DEFAULT 0.00,
+    total_cost NUMERIC DEFAULT 0.00,
+    expiry_date TEXT,
+    spoiled_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    reason TEXT DEFAULT 'Expired',
+    FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_spoilage_product ON spoilage(product_id);
+CREATE INDEX IF NOT EXISTS idx_spoilage_spoiled_at ON spoilage(spoiled_at);
+
+-- Expenses table (for tracking spoilage costs)
+CREATE TABLE IF NOT EXISTS expenses (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    type TEXT NOT NULL CHECK(type IN ('EXPENSE', 'INCOME')),
+    category TEXT NOT NULL,
+    amount NUMERIC NOT NULL DEFAULT 0.00,
+    date TEXT DEFAULT CURRENT_TIMESTAMP,
+    reference_id TEXT,
+    notes TEXT,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_expenses_date ON expenses(date);
+CREATE INDEX IF NOT EXISTS idx_expenses_type ON expenses(type);

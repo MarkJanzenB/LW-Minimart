@@ -2,11 +2,14 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Search, Scan, ShoppingCart, Wallet } from 'lucide-react';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { formatCurrency } from '@/hooks/use-currency';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 
 import { Product, CartItem, Transaction, ViewState } from '@/integrations/supabase/types'; 
 import { TAX_RATE } from '@/constants';
 import { useTransactionStore } from '@/stores/transactionStore';
-import { useToast } from '@/components/ui/use-toast';
+import { toast } from 'sonner';
 
 import ProductCard from '@/components/ProductCard';
 import CartItemComponent from '@/components/CartItem';
@@ -22,13 +25,16 @@ function PosPage() {
   const [transaction, setTransaction] = useState<Transaction | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
   const kaChingAudioRef = useRef<HTMLAudioElement | null>(null);
-  const { toast } = useToast();
 
   const [selectedCartItemIndex, setSelectedCartItemIndex] = useState<number | null>(null);
   const [selectedProductIndex, setSelectedProductIndex] = useState<number | null>(0);
   const [activeList, setActiveList] = useState<'products' | 'cart'>('products');
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [isQuantityModalOpen, setIsQuantityModalOpen] = useState(false);
+  const [scannedProduct, setScannedProduct] = useState<Product | null>(null);
+  const [quantityInput, setQuantityInput] = useState('1');
+  const quantityInputRef = useRef<HTMLInputElement>(null);
 
   const addTransactionToStore = useTransactionStore((state) => state.addTransaction);
 
@@ -58,6 +64,7 @@ function PosPage() {
               stock: Number(p.stock ?? 0),
               barcode: p.barcode ?? '',
               category: p.category ?? 'Uncategorized',
+              image: p.imageUrl || p.image_url || undefined,
               color: undefined,
             }));
 
@@ -86,6 +93,7 @@ function PosPage() {
                 stock: Number(p.stock ?? p.stock_quantity ?? 0),
                 barcode: p.barcode ?? '',
                 category: p.category ?? 'Uncategorized',
+                image: p.imageUrl || p.image_url || undefined,
                 color: undefined,
               }));
             
@@ -202,34 +210,115 @@ function PosPage() {
   };
 
   // Cart Actions
-  const addToCart = (product: Product) => {
+  const addToCart = (product: Product, quantity: number = 1, replaceExisting: boolean = false) => {
     const cartItem = cart.find(item => item.id === product.id);
     const currentQuantityInCart = cartItem ? cartItem.quantity : 0;
     const availableStock = getStockForProduct(product.id);
+    
+    // If replaceExisting is true (from quantity modal), use the exact quantity
+    // Otherwise, add to existing (for clicking products directly)
+    const newQuantity = replaceExisting ? quantity : (currentQuantityInCart + quantity);
 
-    if (currentQuantityInCart < availableStock) {
+    if (newQuantity <= availableStock) {
       setCart(prev => {
         const existingIndex = prev.findIndex(item => item.id === product.id);
         if (existingIndex !== -1) {
           setSelectedCartItemIndex(existingIndex);
           return prev.map((item, index) => 
             index === existingIndex 
-              ? { ...item, quantity: item.quantity + 1 } 
+              ? { ...item, quantity: newQuantity } 
               : item
           );
         }
         setSelectedCartItemIndex(prev.length);
-        return [...prev, { ...product, quantity: 1 }];
+        return [...prev, { ...product, quantity }];
       });
       playBeep();
     } else {
-      toast({
-        title: 'Out of stock',
-        description: `${product.name} has no more stock available.`,
-        variant: 'destructive',
+      toast.error(`${product.name} has no more stock available.`, {
+        duration: 4000,
+        style: {
+          fontSize: '16px',
+          padding: '16px 20px',
+          minWidth: '350px',
+          fontWeight: '600',
+          backgroundColor: '#fee2e2',
+          border: '1px solid #fca5a5',
+          color: '#991b1b',
+        },
       });
       playError();
     }
+  };
+
+  const handleScannedProduct = (product: Product) => {
+    // Check if product is out of stock
+    const availableStock = getStockForProduct(product.id);
+    if (availableStock <= 0) {
+      toast.error(`${product.name} is currently out of stock.`, {
+        duration: 4000,
+        style: {
+          fontSize: '16px',
+          padding: '16px 20px',
+          minWidth: '350px',
+          fontWeight: '600',
+          backgroundColor: '#fee2e2',
+          border: '1px solid #fca5a5',
+          color: '#991b1b',
+        },
+      });
+      playError();
+      return;
+    }
+    
+    setScannedProduct(product);
+    setQuantityInput(''); // Empty by default, user must input
+    setIsQuantityModalOpen(true);
+    // Focus quantity input after modal opens
+    setTimeout(() => quantityInputRef.current?.focus(), 100);
+  };
+
+  const handleQuantityConfirm = () => {
+    if (!scannedProduct) return;
+    const qty = parseInt(quantityInput);
+    
+    // Validate quantity input
+    if (!quantityInput || isNaN(qty) || qty <= 0) {
+      toast.error('Please enter a valid quantity greater than 0.', {
+        duration: 3000,
+      });
+      playError();
+      return;
+    }
+    
+    const availableStock = getStockForProduct(scannedProduct.id);
+    if (qty > availableStock) {
+      toast.error(`Only ${availableStock} unit(s) available for ${scannedProduct.name}.`, {
+        duration: 4000,
+        style: {
+          backgroundColor: '#fee2e2',
+          border: '1px solid #fca5a5',
+          color: '#991b1b',
+        },
+      });
+      playError();
+      return;
+    }
+    
+    // Use replaceExisting=true to set the exact quantity instead of adding
+    addToCart(scannedProduct, qty, true);
+    setIsQuantityModalOpen(false);
+    setScannedProduct(null);
+    setQuantityInput('');
+    // Keep scanner open for continuous scanning
+  };
+
+  const handleQuantityChange = (delta: number) => {
+    if (!scannedProduct) return;
+    const currentQty = parseInt(quantityInput) || 0;
+    const maxQty = getStockForProduct(scannedProduct.id);
+    const newQty = Math.max(1, Math.min(maxQty, currentQty + delta));
+    setQuantityInput(newQty.toString());
   };
 
   const updateQuantity = (id: string, delta: number) => {
@@ -246,10 +335,13 @@ function PosPage() {
       }
 
       if (newQty > availableStock) {
-        toast({
-          title: 'Stock limit reached',
-          description: `Only ${availableStock} in stock for ${item.name}.`,
-          variant: 'destructive',
+        toast.error(`Only ${availableStock} in stock for ${item.name}.`, {
+          duration: 4000,
+          style: {
+            backgroundColor: '#fee2e2',
+            border: '1px solid #fca5a5',
+            color: '#991b1b',
+          },
         });
         playError();
         return prev;
@@ -674,6 +766,7 @@ function PosPage() {
             <span>F1: Pay</span>
             <span>F2: Search</span>
             <span>Tab: Switch Lists</span>
+              <span>Spacebar: Scan</span>
           </div>
         </div>
       </div>
@@ -816,22 +909,145 @@ function PosPage() {
         onScan={(barcode) => {
           const normalized = (barcode ?? '').toString().trim();
           console.log('POS: Scanner modal scanned barcode:', normalized);
+          
+          if (!normalized) {
+            return;
+          }
+          
           const match = products.find(
             (p) => (p.barcode ?? '').toString().trim() === normalized,
           );
           if (match) {
-            addToCart(match);
+            handleScannedProduct(match);
             return;
           }
+          
+          // Try to find product in database
           void findProductByBarcode(normalized).then((fallback) => {
             if (fallback) {
-              addToCart(fallback);
+              handleScannedProduct(fallback);
             } else {
+              // Product not found in inventory
+              toast.warning(`Product not found! Please add it to inventory first.`, {
+                duration: 5000,
+                style: {
+                  fontSize: '16px',
+                  padding: '16px 20px',
+                  minWidth: '400px',
+                  fontWeight: '600',
+                  backgroundColor: '#fef3c7',
+                  border: '1px solid #fcd34d',
+                  color: '#92400e',
+                },
+              });
+              playError();
               console.warn('POS: No product found for scanned barcode:', normalized);
             }
           });
         }}
       />
+
+      {/* Quantity Input Modal - Higher z-index than scanner */}
+      <Dialog open={isQuantityModalOpen} onOpenChange={(open) => {
+        if (!open) {
+          setIsQuantityModalOpen(false);
+          setScannedProduct(null);
+          setQuantityInput('');
+        }
+      }}>
+        <DialogContent className="max-w-md !z-[2000]" style={{ zIndex: 2000 }}>
+          <DialogHeader>
+            <DialogTitle>Enter Quantity</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-6 mt-4">
+            {scannedProduct && (
+              <div className="bg-muted/50 rounded-lg p-4">
+                <p className="text-base font-semibold">{scannedProduct.name}</p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Available: {getStockForProduct(scannedProduct.id)} | Price: {formatCurrency(scannedProduct.price)}
+                </p>
+              </div>
+            )}
+            <div className="space-y-3">
+              <Label htmlFor="quantity" className="text-base font-medium">Quantity</Label>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => handleQuantityChange(-1)}
+                  className="w-14 h-14 rounded-lg border-2 border-primary bg-background hover:bg-primary hover:text-primary-foreground transition-colors flex items-center justify-center text-2xl font-bold text-primary"
+                  disabled={!quantityInput || parseInt(quantityInput) <= 1}
+                >
+                  −
+                </button>
+                <Input
+                  id="quantity"
+                  ref={quantityInputRef}
+                  type="number"
+                  min="1"
+                  max={scannedProduct ? getStockForProduct(scannedProduct.id) : 999}
+                  value={quantityInput}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    // Allow empty string or valid numbers
+                    if (val === '' || /^\d+$/.test(val)) {
+                      const numVal = parseInt(val);
+                      if (val === '' || (numVal > 0 && numVal <= (scannedProduct ? getStockForProduct(scannedProduct.id) : 999))) {
+                        setQuantityInput(val);
+                      }
+                    }
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleQuantityConfirm();
+                    } else if (e.key === 'Escape') {
+                      setIsQuantityModalOpen(false);
+                      setScannedProduct(null);
+                      setQuantityInput('');
+                    } else if (e.key === 'ArrowUp') {
+                      e.preventDefault();
+                      handleQuantityChange(1);
+                    } else if (e.key === 'ArrowDown') {
+                      e.preventDefault();
+                      handleQuantityChange(-1);
+                    }
+                  }}
+                  className="flex-1 h-14 text-center text-3xl font-bold"
+                  autoFocus
+                />
+                <button
+                  type="button"
+                  onClick={() => handleQuantityChange(1)}
+                  className="w-14 h-14 rounded-lg border-2 border-primary bg-background hover:bg-primary hover:text-primary-foreground transition-colors flex items-center justify-center text-2xl font-bold text-primary"
+                  disabled={!quantityInput || parseInt(quantityInput) >= (scannedProduct ? getStockForProduct(scannedProduct.id) : 999)}
+                >
+                  +
+                </button>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsQuantityModalOpen(false);
+                  setScannedProduct(null);
+                  setQuantityInput('');
+                }}
+                className="px-6 py-2.5 text-sm border border-border rounded-md hover:bg-muted"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleQuantityConfirm}
+                className="px-6 py-2.5 text-sm bg-primary text-primary-foreground rounded-md hover:bg-primary/90 font-medium"
+              >
+                Add to Cart
+              </button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
     </>
   );
