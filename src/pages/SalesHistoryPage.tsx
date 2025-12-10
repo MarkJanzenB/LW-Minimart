@@ -31,16 +31,16 @@ function SalesHistoryPage() {
       if (res.success && Array.isArray(res.data) && res.data.length > 0) {
         const mapped = res.data.map((row: any) => ({
           id: (row.transaction_id ?? row.id)?.toString?.() ?? '',
-          date: row.created_at ? new Date(row.created_at) : new Date(),
-          items: [],
+          date: row.date ?? row.created_at ? new Date(row.date ?? row.created_at) : new Date(),
+          items: Array.isArray(row.items) ? row.items : [],
           subtotal: Number(row.subtotal ?? 0),
-          tax: Number(row.tax_amount ?? 0),
-          total: Number(row.total_amount ?? 0),
+          tax: Number(row.tax ?? row.tax_amount ?? 0),
+          total: Number(row.total ?? row.total_amount ?? 0),
           cashReceived: row.cash_received ?? undefined,
           change: row.change ?? undefined,
           paymentMethod: row.payment_method === 'qr' ? 'qr' : 'cash',
           referenceNumber: row.reference_number ?? undefined,
-          status: 'Completed' as const,
+          status: (row.status || 'Completed') as 'Completed' | 'Refunded' | 'Cancelled',
         }));
         setTransactions(mapped);
       } else if (res.success && Array.isArray(res.data) && res.data.length === 0) {

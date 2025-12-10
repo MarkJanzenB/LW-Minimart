@@ -64,6 +64,7 @@ db.exec(`
     tax_amount REAL DEFAULT 0,
     total_amount REAL DEFAULT 0,
     payment_method TEXT,
+    status TEXT DEFAULT 'Completed' CHECK(status IN ('Completed', 'Refunded', 'Cancelled')),
     created_by INTEGER,
     created_at TEXT DEFAULT CURRENT_TIMESTAMP
   );
@@ -97,6 +98,19 @@ try {
   const message = e instanceof Error ? e.message : String(e);
   if (!message.includes("duplicate column name")) {
     console.error("Failed to add image_url column to products table:", e);
+  }
+}
+
+// Add status column to transactions table if it doesn't exist
+try {
+  db.exec("ALTER TABLE transactions ADD COLUMN status TEXT DEFAULT 'Completed'");
+  // Update existing rows that might have NULL status (though DEFAULT should handle this)
+  db.exec("UPDATE transactions SET status = 'Completed' WHERE status IS NULL OR status = ''");
+  console.log("✓ Added status column to transactions table");
+} catch (e) {
+  const message = e instanceof Error ? e.message : String(e);
+  if (!message.includes("duplicate column name")) {
+    console.error("Failed to add status column to transactions table:", e);
   }
 }
 
