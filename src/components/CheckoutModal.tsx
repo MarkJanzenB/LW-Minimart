@@ -64,16 +64,16 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ total, onConfirm, onCance
       <div className="bg-[#FDFBF7] w-full max-w-4xl h-auto md:h-[600px] max-h-[90vh] rounded-2xl shadow-2xl flex flex-col md:flex-row overflow-hidden">
         
         {/* Left Side: Summary */}
-        <div className="w-full md:w-1/3 bg-[#F5F0EB] p-6 md:p-8 flex flex-col justify-between border-b md:border-b-0 md:border-r border-stone-200">
+        <div className="w-full md:w-1/3 bg-[#F5F0EB] p-4 sm:p-6 md:p-8 flex flex-col justify-between border-b md:border-b-0 md:border-r border-stone-200">
            <div>
-             <h2 className="text-3xl font-extrabold text-stone-900 mb-2">Checkout</h2>
-             <p className="text-stone-500 mb-8">Total Due</p>
-             <div className="text-6xl font-black text-stone-800 tracking-tight">
+             <h2 className="text-2xl sm:text-3xl font-extrabold text-stone-900 mb-2">Checkout</h2>
+             <p className="text-sm sm:text-base text-stone-500 mb-4 sm:mb-6 md:mb-8">Total Due</p>
+             <div className="text-2xl sm:text-3xl md:text-4xl lg:text-4xl font-black text-stone-800 tracking-tight break-words">
                {formatCurrency(total)}
              </div>
            </div>
            
-           <div className="text-xs text-stone-400">
+           <div className="text-xs sm:text-sm text-stone-400 mt-4 sm:mt-0">
              Press [Enter] to Print, [Esc] to Cancel
            </div>
         </div>

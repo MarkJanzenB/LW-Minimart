@@ -91,9 +91,14 @@ declare global {
         getById(transactionId: string): Promise<{ success: boolean; data?: any; message?: string }>;
         create(transactionData: any): Promise<{ success: boolean; data?: any; message?: string }>;
       };
-      dashboard: {
-        getMetrics(): Promise<{ success: boolean; data?: any; message?: string }>;
-      };
+  dashboard: {
+    getMetrics(): Promise<{ success: boolean; data?: any; message?: string }>;
+  };
+  spoilage: {
+    moveToSpoilage(productId: number, quantity: number, reason?: string): Promise<{ success: boolean; data?: any; message?: string }>;
+    getAll(limit?: number, offset?: number): Promise<{ success: boolean; data?: any[]; message?: string }>;
+    getStats(): Promise<{ success: boolean; data?: any; message?: string }>;
+  };
     };
   }
 }

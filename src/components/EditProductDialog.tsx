@@ -6,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Product } from '@/services/database';
 import { toast } from 'sonner';
+import { Scan } from 'lucide-react';
 
 interface EditProductDialogProps {
   isOpen: boolean;
@@ -40,20 +41,91 @@ export function EditProductDialog({
 
   useEffect(() => {
     if (product) {
-      setFormData({
-        name: product.name || '',
-        sku: product.sku || '',
-        category: product.category || '',
-        supplier: product.supplier || '',
-        cost: product.cost != null ? String(product.cost) : '',
-        price: product.price != null ? String(product.price) : '',
-        stock: product.stock != null ? String(product.stock) : '',
-        minStock: product.minStock != null ? String(product.minStock) : '',
-        expiryDate: product.expiryDate || '',
-        batchNo: product.batchNo || '',
-        barcode: product.barcode || '',
-        imageUrl: product.imageUrl || '',
-      });
+      // Fetch full product data including cost from database
+      const fetchFullProductData = async () => {
+        try {
+          // Get product ID - handle both string and number IDs
+          const productId = typeof product.id === 'string' ? parseInt(product.id) : product.id;
+          if (isNaN(productId)) {
+            // Fallback to using product data as-is if ID is invalid
+            setFormData({
+              name: product.name || '',
+              sku: product.sku || '',
+              category: product.category || '',
+              supplier: product.supplier || '',
+              cost: product.cost != null ? String(product.cost) : '',
+              price: product.price != null ? String(product.price) : '',
+              stock: product.stock != null ? String(product.stock) : '',
+              minStock: product.minStock != null ? String(product.minStock) : '',
+              expiryDate: product.expiryDate || '',
+              batchNo: product.batchNo || '',
+              barcode: product.barcode || '',
+              imageUrl: product.imageUrl || '',
+            });
+            return;
+          }
+
+          // Fetch full product data from SQLite (includes purchase_price/cost)
+          if (typeof window !== 'undefined' && (window as any).api?.products?.getAll) {
+            const response = await (window as any).api.products.getAll();
+            if (response.success && response.data) {
+              const fullProduct = response.data.find((p: any) => p.id === productId);
+              if (fullProduct) {
+                setFormData({
+                  name: fullProduct.name || '',
+                  sku: fullProduct.sku || '',
+                  category: fullProduct.category || '',
+                  supplier: fullProduct.supplier || '',
+                  cost: fullProduct.purchase_price != null ? String(fullProduct.purchase_price) : '',
+                  price: fullProduct.price != null ? String(fullProduct.price) : '',
+                  stock: fullProduct.stock != null ? String(fullProduct.stock) : '',
+                  minStock: fullProduct.reorder_threshold != null ? String(fullProduct.reorder_threshold) : '',
+                  expiryDate: product.expiryDate || '',
+                  batchNo: product.batchNo || '',
+                  barcode: fullProduct.barcode || '',
+                  imageUrl: fullProduct.image_url || fullProduct.imageUrl || '',
+                });
+                return;
+              }
+            }
+          }
+
+          // Fallback to using product data as-is
+          setFormData({
+            name: product.name || '',
+            sku: product.sku || '',
+            category: product.category || '',
+            supplier: product.supplier || '',
+            cost: product.cost != null ? String(product.cost) : '',
+            price: product.price != null ? String(product.price) : '',
+            stock: product.stock != null ? String(product.stock) : '',
+            minStock: product.minStock != null ? String(product.minStock) : '',
+            expiryDate: product.expiryDate || '',
+            batchNo: product.batchNo || '',
+            barcode: product.barcode || '',
+            imageUrl: product.imageUrl || '',
+          });
+        } catch (error) {
+          console.error('Error fetching full product data:', error);
+          // Fallback to using product data as-is
+          setFormData({
+            name: product.name || '',
+            sku: product.sku || '',
+            category: product.category || '',
+            supplier: product.supplier || '',
+            cost: product.cost != null ? String(product.cost) : '',
+            price: product.price != null ? String(product.price) : '',
+            stock: product.stock != null ? String(product.stock) : '',
+            minStock: product.minStock != null ? String(product.minStock) : '',
+            expiryDate: product.expiryDate || '',
+            batchNo: product.batchNo || '',
+            barcode: product.barcode || '',
+            imageUrl: product.imageUrl || '',
+          });
+        }
+      };
+
+      void fetchFullProductData();
     }
   }, [product]);
 
@@ -144,15 +216,19 @@ export function EditProductDialog({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Edit Product</DialogTitle>
+      <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col p-0">
+        <DialogHeader className="px-6 pt-6 pb-4 border-b border-border flex-shrink-0">
+          <DialogTitle className="text-2xl font-bold">Edit Product</DialogTitle>
+          <p className="text-sm text-muted-foreground mt-1">Update the product details below. Fields marked with <span className="text-red-500">*</span> are required.</p>
         </DialogHeader>
 
-        <form onSubmit={handleSave} className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="flex-1 overflow-y-auto px-6 py-4 scrollbar-thin scrollbar-thumb-muted scrollbar-track-transparent">
+          <form onSubmit={handleSave} className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-2">
-              <Label htmlFor="name">Product Name *</Label>
+              <Label htmlFor="name">
+                Product Name <span className="text-red-500">*</span>
+              </Label>
               <Input
                 id="name"
                 name="name"
@@ -163,7 +239,9 @@ export function EditProductDialog({
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="sku">SKU *</Label>
+              <Label htmlFor="sku">
+                SKU <span className="text-red-500">*</span>
+              </Label>
               <Input
                 id="sku"
                 name="sku"
@@ -203,7 +281,9 @@ export function EditProductDialog({
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="cost">Cost (₱) *</Label>
+              <Label htmlFor="cost">
+                Cost (₱) <span className="text-red-500">*</span>
+              </Label>
               <Input
                 id="cost"
                 name="cost"
@@ -217,7 +297,9 @@ export function EditProductDialog({
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="price">Selling Price (₱) *</Label>
+              <Label htmlFor="price">
+                Selling Price (₱) <span className="text-red-500">*</span>
+              </Label>
               <Input
                 id="price"
                 name="price"
@@ -231,7 +313,9 @@ export function EditProductDialog({
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="stock">Current Stock *</Label>
+              <Label htmlFor="stock">
+                Current Stock <span className="text-red-500">*</span>
+              </Label>
               <Input
                 id="stock"
                 name="stock"
@@ -279,32 +363,52 @@ export function EditProductDialog({
 
             <div className="space-y-2">
               <Label htmlFor="barcode">Barcode</Label>
-              <div className="flex gap-2">
+              <div className="flex gap-2 items-center">
                 <Input
                   id="barcode"
                   name="barcode"
                   value={formData.barcode}
                   onChange={handleChange}
+                  placeholder="e.g., 123456789012"
                 />
                 <Button
                   type="button"
                   variant="outline"
+                  className="flex items-center gap-2"
                   onClick={() => {}}
                 >
-                  Scan Barcode
+                  <Scan className="w-4 h-4" />
+                  <span>Scan</span>
                 </Button>
               </div>
             </div>
 
             <div className="space-y-2 md:col-span-2">
               <Label htmlFor="imageUrl">Product Image (optional)</Label>
-              <Input
-                id="imageUrl"
-                name="imageUrl"
-                type="file"
-                accept="image/*"
-                onChange={handleImageChange}
-              />
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center gap-4">
+                  <Input
+                    id="imageUrl"
+                    name="imageUrl"
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageChange}
+                    className="cursor-pointer"
+                  />
+                  {formData.imageUrl && (
+                    <div className="flex-shrink-0">
+                      <img 
+                        src={formData.imageUrl} 
+                        alt="Preview" 
+                        className="w-20 h-20 object-cover rounded-md border border-border"
+                      />
+                    </div>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Upload a product image. Supported formats: JPG, PNG, GIF
+                </p>
+              </div>
             </div>
           </div>
 
@@ -321,7 +425,8 @@ export function EditProductDialog({
               {isSaving ? 'Saving...' : 'Save'}
             </Button>
           </DialogFooter>
-        </form>
+          </form>
+        </div>
       </DialogContent>
     </Dialog>
   );

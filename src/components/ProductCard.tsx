@@ -16,9 +16,16 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onClick }) => {
       onClick={() => onClick(product)}
       className="flex flex-col p-4 bg-card rounded-xl shadow-sm border-2 border-border hover:shadow-lg hover:border-primary transition-all duration-200 text-left group h-full relative overflow-hidden"
     >
-      <div className={`aspect-square w-full ${product.color || 'bg-muted'} rounded-lg mb-4 flex items-center justify-center group-hover:scale-105 transition-transform duration-300`}>
-         {/* Placeholder for actual image */}
-         <Package className="w-12 h-12 text-muted-foreground opacity-50" />
+      <div className="aspect-square w-full bg-muted rounded-lg mb-4 flex items-center justify-center group-hover:scale-105 transition-transform duration-300 overflow-hidden">
+         {(product.image || (product as any).imageUrl) ? (
+           <img 
+             src={(product.image || (product as any).imageUrl) as string} 
+             alt={product.name}
+             className="w-full h-full object-cover"
+           />
+         ) : (
+           <Package className="w-12 h-12 text-muted-foreground opacity-50" />
+         )}
       </div>
       
       <div className="flex-1 w-full">

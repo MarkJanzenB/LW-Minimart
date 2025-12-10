@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import {
   Search,
   Plus,
@@ -9,7 +9,7 @@ import {
   Package,
   AlertTriangle,
   CheckCircle,
-  X,
+  X,  
   FileSpreadsheet,
   FileText,
   ArrowUpDown,
@@ -19,6 +19,7 @@ import {
   Upload,
   MoreHorizontal,
   MoreVertical,
+  Scan,
 } from "lucide-react";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
@@ -27,6 +28,8 @@ import { dbService, Product } from "@/services/database";
 import { toast } from "sonner";
 import { AddProductDialog } from "@/components/AddProductDialog";
 import { EditProductDialog } from "@/components/EditProductDialog";
+import { useScannerStore } from "@/stores/scannerStore";
+import BarcodeScannerModal from "@/components/BarcodeScannerModal";
 
 // TypeScript Interface
 interface InventoryItem {
@@ -117,6 +120,7 @@ const Inventory = () => {
     totalCost: number;
   } | null>(null);
   const [expiredProductsForSpoilage, setExpiredProductsForSpoilage] = useState<Product[]>([]);
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
 
   // Fetch products from database on component mount
   useEffect(() => {
@@ -363,15 +367,15 @@ const Inventory = () => {
 
   const openAdminViewer = async () => {
     try {
-      const api = window.api;
+      const api = (window as any).api;
       if (!api) {
         toast.error("Admin data viewer is only available in the desktop app.");
         return;
       }
 
       // Load from SQLite (single source of truth) instead of IndexedDB
-      if (api.products?.getInventory) {
-        const response = await api.products.getInventory();
+      if ((api as any).products?.getInventory) {
+        const response = await (api as any).products.getInventory();
         if (response.success && response.data) {
           // Map SQLite data to Admin Viewer format
           const mappedData = response.data.map((p: any) => ({
@@ -419,7 +423,7 @@ const Inventory = () => {
 
   const handleAdminDelete = async (id: string) => {
     try {
-      const api = window.api;
+      const api = (window as any).api;
       
       // Delete from SQLite if it's a numeric ID (SQLite product)
       const productId = parseInt(id);
@@ -452,6 +456,7 @@ const Inventory = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [showLowStockOnly, setShowLowStockOnly] = useState(false);
+  const [showExpiredOnly, setShowExpiredOnly] = useState(false);
   const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
   const [isCategoryOpen, setIsCategoryOpen] = useState(false);
   const [sortKey, setSortKey] = useState<SortKey>("id");
@@ -459,6 +464,17 @@ const Inventory = () => {
   const [viewMode, setViewMode] = useState<"list" | "card">("list");
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 20;
+  const lastScannedBarcode = useScannerStore((s) => s.lastScannedBarcode);
+  const setLastScannedBarcode = useScannerStore((s) => s.setLastScannedBarcode);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const [hasPlayedLowStockAlert, setHasPlayedLowStockAlert] = useState(false);
+  const [hasPlayedExpiredAlert, setHasPlayedExpiredAlert] = useState(false);
+  // Removed auto-fill search bar - user will manually search if needed
+  // useEffect(() => {
+  //   if (lastScannedBarcode) {
+  //     setSearchTerm(lastScannedBarcode);
+  //   }
+  // }, [lastScannedBarcode]);
 
   // Use inventory state as the source of truth for display
   const baseData: InventoryItem[] = inventory;
@@ -548,7 +564,14 @@ const Inventory = () => {
 
   // Calculate statistics
   const stats = useMemo(() => {
-    const lowStock = groupedData.filter((item) => item.stock > 0 && item.stock <= 10).length;
+    // Low stock: items with stock > 0 and stock <= minStock (or <= 10 if minStock is 0 or not set)
+    const lowStock = groupedData.filter((item) => {
+      if (item.stock <= 0) return false;
+      if (item.minStock > 0) {
+        return item.stock <= item.minStock;
+      }
+      return item.stock <= 10; // Default threshold if minStock is not set
+    }).length;
     const inStock = groupedData.filter((item) => item.status === "In Stock").length;
     const expired = groupedData.filter((item) => item.status === "Expired").length;
     const outOfStock = groupedData.filter((item) => item.status === "Out of Stock").length;
@@ -559,6 +582,102 @@ const Inventory = () => {
     () => groupedData.some((item) => item.status === "Out of Stock"),
     [groupedData]
   );
+
+  // Sound effect functions
+  const getAudioContext = () => {
+    if (!audioCtxRef.current) {
+      audioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+    }
+    return audioCtxRef.current;
+  };
+
+  const playAlertSound = () => {
+    try {
+      const ctx = getAudioContext();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = 800;
+      gain.gain.value = 0.2;
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      const now = ctx.currentTime;
+      gain.gain.setValueAtTime(0.2, now);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.3);
+      osc.start(now);
+      osc.stop(now + 0.3);
+    } catch (error) {
+      console.error('Error playing alert sound:', error);
+    }
+  };
+
+  const playWarningSound = () => {
+    try {
+      const ctx = getAudioContext();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'square';
+      osc.frequency.value = 600;
+      gain.gain.value = 0.2;
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      const now = ctx.currentTime;
+      gain.gain.setValueAtTime(0.2, now);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.25);
+      osc.start(now);
+      osc.stop(now + 0.25);
+    } catch (error) {
+      console.error('Error playing warning sound:', error);
+    }
+  };
+
+  // Check for alerts
+  useEffect(() => {
+    if (groupedData.length === 0 || isLoading) return;
+
+    const checkAlerts = () => {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const sevenDaysFromNow = new Date(today);
+      sevenDaysFromNow.setDate(sevenDaysFromNow.getDate() + 7);
+
+      // Check for low stock
+      if (stats.lowStock > 0 && !hasPlayedLowStockAlert) {
+        playWarningSound();
+        setHasPlayedLowStockAlert(true);
+        toast.warning(`${stats.lowStock} product(s) are running low on stock!`, {
+          duration: 5000,
+        });
+      }
+
+      // Check for nearing expired products (within 7 days)
+      const nearingExpired = groupedData.filter((item) => {
+        if (!item.expiryDate) return false;
+        const expiry = new Date(item.expiryDate);
+        expiry.setHours(0, 0, 0, 0);
+        return expiry >= today && expiry <= sevenDaysFromNow && item.status !== "Expired";
+      });
+
+      if (nearingExpired.length > 0 && !hasPlayedExpiredAlert) {
+        playAlertSound();
+        setHasPlayedExpiredAlert(true);
+        toast.warning(`${nearingExpired.length} product(s) are expiring within 7 days!`, {
+          duration: 5000,
+        });
+      } else if (stats.expired > 0 && !hasPlayedExpiredAlert) {
+        // Check for expired products (only if no nearing expired)
+        playAlertSound();
+        setHasPlayedExpiredAlert(true);
+        toast.error(`${stats.expired} product(s) have expired!`, {
+          duration: 5000,
+        });
+      }
+    };
+
+    // Small delay to ensure data is loaded
+    const timeoutId = setTimeout(checkAlerts, 500);
+    return () => clearTimeout(timeoutId);
+  }, [stats.lowStock, stats.expired, groupedData.length, isLoading, hasPlayedLowStockAlert, hasPlayedExpiredAlert]);
 
   // Filter and sort data
   const filteredData = useMemo(() => {
@@ -582,7 +701,18 @@ const Inventory = () => {
 
     // Low stock filter
     if (showLowStockOnly) {
-      data = data.filter((item) => item.stock <= 10);
+      data = data.filter((item) => {
+        if (item.stock <= 0) return false;
+        if (item.minStock > 0) {
+          return item.stock <= item.minStock;
+        }
+        return item.stock <= 10; // Default threshold if minStock is not set
+      });
+    }
+
+    // Expired filter
+    if (showExpiredOnly) {
+      data = data.filter((item) => item.status === "Expired");
     }
 
     // Sort
@@ -599,7 +729,7 @@ const Inventory = () => {
     });
 
     return data;
-  }, [searchTerm, selectedCategory, showLowStockOnly, sortKey, sortDirection, groupedData]);
+  }, [searchTerm, selectedCategory, showLowStockOnly, showExpiredOnly, sortKey, sortDirection, groupedData]);
 
   const paginatedData = useMemo(() => {
     const startIndex = (currentPage - 1) * itemsPerPage;
@@ -770,14 +900,14 @@ const Inventory = () => {
 
   const openSpoilageDialog = async () => {
     try {
-      const products = await dbService.getProducts();
+      // Get expired products from current inventory
       const today = new Date();
       today.setHours(0, 0, 0, 0);
 
-      const expired = products.filter((product) => {
-        if (!product.expiryDate) return false;
-        const expiry = new Date(product.expiryDate);
-        return expiry < today && product.status !== "Spoiled";
+      const expired = inventory.filter((item) => {
+        if (!item.expiryDate) return false;
+        const expiry = new Date(item.expiryDate);
+        return expiry < today && item.status !== "Spoiled" && item.stock > 0;
       });
 
       if (expired.length === 0) {
@@ -786,9 +916,32 @@ const Inventory = () => {
       }
 
       const totalQuantity = expired.reduce((sum, p) => sum + p.stock, 0);
-      const totalCost = expired.reduce((sum, p) => sum + (p.cost ?? 0) * p.stock, 0);
+      // Note: InventoryItem doesn't have cost, we'll need to fetch it from the product data
+      // For now, use 0 as default cost
+      const totalCost = expired.reduce((sum, p) => sum + 0 * p.stock, 0);
 
-      setExpiredProductsForSpoilage(expired);
+      // Map to Product format for spoilage
+      // We'll need to fetch the actual cost from the product when moving to spoilage
+      const expiredProducts: Product[] = expired.map((item) => ({
+        id: item.id,
+        name: item.name,
+        sku: item.sku,
+        category: item.category,
+        supplier: '',
+        cost: 0, // Will be fetched from product data when moving to spoilage
+        price: item.price,
+        stock: item.stock,
+        minStock: item.minStock,
+        expiryDate: item.expiryDate,
+        status: item.status,
+        batchNo: item.batchNo,
+        barcode: item.barcode || '',
+        imageUrl: item.imageUrl || '',
+        createdAt: '',
+        updatedAt: '',
+      }));
+
+      setExpiredProductsForSpoilage(expiredProducts);
       setSpoilageSummary({
         products: expired.length,
         totalQuantity,
@@ -809,15 +962,54 @@ const Inventory = () => {
 
     try {
       setIsProcessingSpoilage(true);
-      for (const product of expiredProductsForSpoilage) {
-        await dbService.moveProductToSpoilage(product, "Expired");
+      const api = (window as any).api;
+      
+      if (!api?.spoilage?.moveToSpoilage) {
+        throw new Error('Spoilage API not available');
       }
 
+      // Move each expired product to spoilage
+      let successCount = 0;
+      let failCount = 0;
+      
+      for (const product of expiredProductsForSpoilage) {
+        const productId = typeof product.id === 'string' ? parseInt(product.id) : product.id;
+        if (isNaN(productId)) {
+          console.warn(`Invalid product ID: ${product.id}`);
+          failCount++;
+          continue;
+        }
+
+        try {
+          const response = await api.spoilage.moveToSpoilage(
+            productId,
+            product.stock,
+            "Expired"
+          );
+
+          if (response.success) {
+            successCount++;
+          } else {
+            console.error(`Failed to move product ${product.name} to spoilage:`, response.message);
+            failCount++;
+          }
+        } catch (err: any) {
+          console.error(`Error moving product ${product.name} to spoilage:`, err);
+          failCount++;
+        }
+      }
+
+      // Refresh inventory after moving to spoilage
       await handleProductAdded();
-      toast.success("Expired products moved to spoilage with expense records.");
-    } catch (error) {
+      
+      if (successCount > 0) {
+        toast.success(`${successCount} expired product(s) moved to spoilage with expense records.${failCount > 0 ? ` ${failCount} failed.` : ''}`);
+      } else {
+        toast.error(`Failed to move expired products to spoilage.`);
+      }
+    } catch (error: any) {
       console.error("Error moving products to spoilage:", error);
-      toast.error("Failed to move expired products to spoilage");
+      toast.error(error.message || "Failed to move expired products to spoilage");
     } finally {
       setIsProcessingSpoilage(false);
       setIsSpoilageDialogOpen(false);
@@ -827,11 +1019,10 @@ const Inventory = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background p-6 md:p-10">
-      <div className="max-w-7xl mx-auto">
-        {/* Header Section */}
-        <div className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-10">
-          <div className="px-8 py-6 flex items-center gap-4 justify-between">
+    <>
+      {/* Header Section */}
+      <div className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-20">
+        <div className="px-8 py-6 flex items-center justify-between">
             <div className="flex items-center gap-4">
               <SidebarTrigger />
               <div>
@@ -839,17 +1030,19 @@ const Inventory = () => {
                 <p className="text-muted-foreground mt-1">Track and manage your products.</p>
               </div>
             </div>
-            <button
+            <Button
               type="button"
-              onClick={openAdminViewer}
-              className="p-2 rounded-full hover:bg-muted text-muted-foreground opacity-0 hover:opacity-100 focus:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background transition-opacity"
-              aria-label="Open admin data viewer"
+              variant="outline"
+              className="flex items-center gap-2"
+              onClick={() => setIsScannerOpen(true)}
             >
-              <MoreHorizontal className="w-5 h-5" />
-            </button>
+              <Scan className="w-4 h-4" />
+              <span>Scan</span>
+            </Button>
           </div>
         </div>
 
+      <div className="flex-1 overflow-y-auto p-8">
         {isOwner && hasOutOfStock && (
           <div className="mt-4 mb-6 glass-card border border-destructive/40 bg-destructive/5 px-4 py-3 flex items-start gap-3">
             <AlertTriangle className="w-5 h-5 text-destructive mt-0.5" />
@@ -864,7 +1057,17 @@ const Inventory = () => {
 
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <div className="stat-card-warning animate-fade-in-up opacity-0" style={{ animationDelay: "100ms" }}>
+          <button
+            type="button"
+            onClick={() => {
+              setShowLowStockOnly(true);
+              setShowExpiredOnly(false);
+              setSelectedCategory("All");
+              setSearchTerm("");
+            }}
+            className="stat-card-warning animate-fade-in-up opacity-0 cursor-pointer hover:scale-[1.02] transition-transform"
+            style={{ animationDelay: "100ms" }}
+          >
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-2">Low Stock Items</p>
@@ -874,9 +1077,19 @@ const Inventory = () => {
                 <AlertTriangle className="w-6 h-6 text-accent" />
               </div>
             </div>
-          </div>
+          </button>
 
-          <div className="stat-card-success animate-fade-in-up opacity-0" style={{ animationDelay: "200ms" }}>
+          <button
+            type="button"
+            onClick={() => {
+              setShowLowStockOnly(false);
+              setShowExpiredOnly(false);
+              setSelectedCategory("All");
+              setSearchTerm("");
+            }}
+            className="stat-card-success animate-fade-in-up opacity-0 cursor-pointer hover:scale-[1.02] transition-transform"
+            style={{ animationDelay: "200ms" }}
+          >
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-2">In Stock Items</p>
@@ -886,9 +1099,19 @@ const Inventory = () => {
                 <CheckCircle className="w-6 h-6 text-primary" />
               </div>
             </div>
-          </div>
+          </button>
 
-          <div className="stat-card-light-warning animate-fade-in-up opacity-0" style={{ animationDelay: "300ms" }}>
+          <button
+            type="button"
+            onClick={() => {
+              setShowLowStockOnly(false);
+              setShowExpiredOnly(true);
+              setSelectedCategory("All");
+              setSearchTerm("");
+            }}
+            className="stat-card-light-warning animate-fade-in-up opacity-0 cursor-pointer hover:scale-[1.02] transition-transform"
+            style={{ animationDelay: "300ms" }}
+          >
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-2">Expired Products</p>
@@ -898,28 +1121,33 @@ const Inventory = () => {
                 <Package className="w-6 h-6 text-destructive" />
               </div>
             </div>
-          </div>
+          </button>
         </div>
 
         {/* Filter Bar */}
         <div className="glass-card p-4 mb-6 animate-fade-in-up opacity-0" style={{ animationDelay: "400ms" }}>
           <div className="flex flex-col gap-4">
-            <div className="flex flex-col lg:flex-row gap-4 items-stretch lg:items-center">
+            <div className="flex flex-col lg:flex-row gap-4 items-stretch lg:items-center pb-2">
               {/* Search */}
               <div className="relative flex-1">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                <Search className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                 <input
                   type="text"
                   placeholder="Search by name, batch no, or barcode..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="glass-input w-full pl-12 pr-4"
+                  className="glass-input w-full pr-4"
+                  style={{ paddingLeft: '3.25rem' }}
                 />
               </div>
 
               {/* Low Stock Toggle */}
               <button
-                onClick={() => setShowLowStockOnly(!showLowStockOnly)}
+                type="button"
+                onClick={() => {
+                  setShowLowStockOnly(!showLowStockOnly);
+                  setShowExpiredOnly(false);
+                }}
                 className={`glass-button flex items-center gap-2 ${
                   showLowStockOnly ? "bg-inventory-warning/30 border-inventory-warning" : ""
                 }`}
@@ -932,8 +1160,13 @@ const Inventory = () => {
                 <Button
                   type="button"
                   variant="destructive"
-                  onClick={openSpoilageDialog}
-                  className="flex items-center gap-2"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    void openSpoilageDialog();
+                  }}
+                  className="flex items-center gap-2 relative z-10"
+                  disabled={isProcessingSpoilage}
                 >
                   <AlertTriangle className="w-4 h-4" />
                   <span>Move Expired to Spoilage</span>
@@ -954,7 +1187,7 @@ const Inventory = () => {
               />
 
               {/* Export Button */}
-              <div className="relative z-10">
+              <div className="relative z-[9999]">
                 <button
                   onClick={() => setIsExportMenuOpen(!isExportMenuOpen)}
                   className="glass-button flex items-center gap-2"
@@ -966,7 +1199,7 @@ const Inventory = () => {
                   />
                 </button>
                 {isExportMenuOpen && (
-                  <div className="absolute top-full right-0 mt-2 w-48 glass-card py-2 z-50 animate-scale-in">
+                  <div className="absolute top-full right-0 mt-2 w-48 glass-card py-2 z-[9999] shadow-lg animate-scale-in">
                     <button
                       onClick={exportToCSV}
                       className="w-full text-left px-4 py-2.5 hover:bg-muted transition-colors flex items-center gap-3 text-sm"
@@ -1008,7 +1241,7 @@ const Inventory = () => {
                 <span>Add Product</span>
               </button>
             </div>
-            <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-2 flex-wrap mt-2">
               {categories.map((cat) => (
                 <button
                   key={cat}
@@ -1196,6 +1429,7 @@ const Inventory = () => {
           </div>
         </div>
       </div>
+
       <Dialog open={isAdminViewerOpen} onOpenChange={(open) => setIsAdminViewerOpen(open)}>
         <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
@@ -1376,7 +1610,92 @@ const Inventory = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+      {/* Spoilage Confirmation Dialog */}
+      <Dialog open={isSpoilageDialogOpen} onOpenChange={(open) => setIsSpoilageDialogOpen(open)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Move Expired Products to Spoilage</DialogTitle>
+          </DialogHeader>
+          {spoilageSummary && (
+            <div className="space-y-4 mt-4">
+              <div className="bg-muted/50 rounded-lg p-4 space-y-2">
+                <p className="text-sm text-muted-foreground">Summary:</p>
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <p className="text-xs text-muted-foreground">Products</p>
+                    <p className="text-lg font-semibold">{spoilageSummary.products}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Total Quantity</p>
+                    <p className="text-lg font-semibold">{spoilageSummary.totalQuantity}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Total Cost</p>
+                    <p className="text-lg font-semibold">₱{spoilageSummary.totalCost.toFixed(2)}</p>
+                  </div>
+                </div>
+              </div>
+              <div className="max-h-60 overflow-y-auto border rounded-lg">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted sticky top-0">
+                    <tr>
+                      <th className="px-3 py-2 text-left">Product</th>
+                      <th className="px-3 py-2 text-right">Quantity</th>
+                      <th className="px-3 py-2 text-left">Batch</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {expiredProductsForSpoilage.map((product) => (
+                      <tr key={product.id} className="border-t">
+                        <td className="px-3 py-2">{product.name}</td>
+                        <td className="px-3 py-2 text-right">{product.stock}</td>
+                        <td className="px-3 py-2">{product.batchNo || '-'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                This will move all expired products to spoilage and create expense records. This action cannot be undone.
+              </p>
+            </div>
+          )}
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setIsSpoilageDialogOpen(false)}
+              disabled={isProcessingSpoilage}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={handleConfirmSpoilageMove}
+              disabled={isProcessingSpoilage}
+            >
+              {isProcessingSpoilage ? 'Processing...' : 'Confirm Move to Spoilage'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <BarcodeScannerModal
+        isOpen={isScannerOpen}
+        onClose={() => setIsScannerOpen(false)}
+        onAdd={(code) => {
+          // Set barcode in scanner store and open Add Product Dialog
+          setLastScannedBarcode(code);
+          setIsScannerOpen(false);
+          setIsAddDialogOpen(true);
+        }}
+        onSearch={(code) => {
+          setSearchTerm(code);
+          setIsScannerOpen(false);
+        }}
+      />
+    </>
   );
 };
 

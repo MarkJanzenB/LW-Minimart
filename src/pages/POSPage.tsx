@@ -2,6 +2,9 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Search, Scan, ShoppingCart, Wallet } from 'lucide-react';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { formatCurrency } from '@/hooks/use-currency';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 
 import { Product, CartItem, Transaction, ViewState } from '@/integrations/supabase/types'; 
 import { TAX_RATE } from '@/constants';
@@ -29,6 +32,11 @@ function PosPage() {
   const [activeList, setActiveList] = useState<'products' | 'cart'>('products');
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [isQuantityModalOpen, setIsQuantityModalOpen] = useState(false);
+  const [scannedProduct, setScannedProduct] = useState<Product | null>(null);
+  const [quantityInput, setQuantityInput] = useState('');
+  const quantityInputRef = useRef<HTMLInputElement>(null);
+  const isProcessingQuantity = useRef(false);
 
   const addTransactionToStore = useTransactionStore((state) => state.addTransaction);
 
@@ -42,11 +50,38 @@ function PosPage() {
       try {
         setLoading(true);
         console.log('POS: Fetching products from SQLite...');
-        
+
+        // Prefer inventory-style data if available so POS mirrors the Inventory page
+        if (typeof window !== 'undefined' && (window as any).api?.products?.getInventory) {
+          console.log('POS: Using products:getInventory for POS items...');
+          const response = await (window as any).api.products.getInventory();
+          console.log('POS: getInventory response:', response);
+
+          if (response && response.success && Array.isArray(response.data) && response.data.length > 0) {
+            const mappedProducts: Product[] = response.data.map((p: any) => ({
+              id: p.id?.toString() ?? '',
+              name: p.name ?? '',
+              code: p.sku || p.barcode || `PROD-${p.id}`,
+              price: Number(p.price) || 0,
+              stock: Number(p.stock ?? 0),
+              barcode: p.barcode ?? '',
+              category: p.category ?? 'Uncategorized',
+              image: p.imageUrl || p.image_url || undefined,
+              color: undefined,
+            }));
+
+            console.log(`POS: Loaded ${mappedProducts.length} products from SQLite via getInventory`);
+            setProducts(mappedProducts);
+            return;
+          } else {
+            console.log('POS: No products found via getInventory or invalid data', response);
+          }
+        }
+
         // Use products:getAll which fetches from SQLite
         if (typeof window !== 'undefined' && (window as any).api?.products?.getAll) {
           const response = await (window as any).api.products.getAll();
-          console.log('POS: Products response:', response);
+          console.log('POS: Products response (getAll):', response);
           
           if (response && response.success && Array.isArray(response.data)) {
             // Map SQLite database products to Product interface
@@ -60,19 +95,35 @@ function PosPage() {
                 stock: Number(p.stock ?? p.stock_quantity ?? 0),
                 barcode: p.barcode ?? '',
                 category: p.category ?? 'Uncategorized',
+                image: p.imageUrl || p.image_url || undefined,
                 color: undefined,
               }));
             
-            console.log(`POS: Loaded ${mappedProducts.length} products from SQLite`);
+            console.log(`POS: Loaded ${mappedProducts.length} products from SQLite via getAll`);
             setProducts(mappedProducts);
+            return;
           } else {
             console.warn('POS: Invalid response from products:getAll', response);
-            setProducts([]);
           }
         } else {
           console.error('POS: products:getAll API not available');
-          setProducts([]);
         }
+
+        // Fallback: use local IndexedDB data (same as Inventory page)
+        console.warn('POS: Falling back to IndexedDB via dbService.getProducts()');
+        const { dbService } = await import('@/services/database');
+        const localProducts = await dbService.getProducts();
+        const mappedLocal: Product[] = localProducts.map((p: any) => ({
+          id: p.id.toString(),
+          name: p.name,
+          code: p.sku || p.barcode || `PROD-${p.id}`,
+          price: Number(p.price) || 0,
+          stock: Number(p.stock) || 0,
+          barcode: p.barcode || '',
+          category: p.category || 'Uncategorized',
+          color: undefined,
+        }));
+        setProducts(mappedLocal);
       } catch (error) {
         console.error('POS: Failed to fetch products:', error);
         setProducts([]);
@@ -82,6 +133,17 @@ function PosPage() {
     };
 
     fetchProducts();
+  }, []);
+
+  // Preload the ka-ching audio once to avoid first-play delay
+  useEffect(() => {
+    try {
+      const audio = new Audio('/sounds/kaching.mp3');
+      audio.load();
+      kaChingAudioRef.current = audio;
+    } catch {
+      // ignore preload errors
+    }
   }, []);
 
   // Handle barcode scanning/search - moved after addToCart is defined
@@ -126,35 +188,204 @@ function PosPage() {
     return product ? product.stock : 0;
   };
   
-  // Cart Actions
-  const addToCart = (product: Product) => {
-    const cartItem = cart.find(item => item.id === product.id);
-    const currentQuantityInCart = cartItem ? cartItem.quantity : 0;
-    const availableStock = getStockForProduct(product.id);
+  const findProductByBarcode = async (barcode: string): Promise<Product | null> => {
+    try {
+      const { dbService } = await import('@/services/database');
+      const products = await dbService.getProducts();
+      const match = products.find((p: any) => (p.barcode ?? '').toString() === barcode);
+      if (match) {
+        return {
+          id: match.id?.toString?.() ?? '',
+          name: match.name,
+          code: match.sku || match.barcode || `PROD-${match.id}`,
+          price: Number(match.price) || 0,
+          stock: Number(match.stock ?? 0) || 0,
+          barcode: match.barcode || '',
+          category: match.category || 'Uncategorized',
+          color: undefined,
+        };
+      }
+    } catch (err) {
+      console.error('Barcode lookup via IndexedDB failed', err);
+    }
+    return null;
+  };
 
-    if (currentQuantityInCart < availableStock) {
-      setCart(prev => {
-        const existingIndex = prev.findIndex(item => item.id === product.id);
-        if (existingIndex !== -1) {
-          setSelectedCartItemIndex(existingIndex);
-          return prev.map((item, index) => 
-            index === existingIndex 
-              ? { ...item, quantity: item.quantity + 1 } 
-              : item
-          );
+  // Cart Actions
+  const addToCart = (product: Product, quantity: number = 1, replaceExisting: boolean = false) => {
+    setCart(prev => {
+      const cartItem = prev.find(item => item.id === product.id);
+      const currentQuantityInCart = cartItem ? cartItem.quantity : 0;
+      const availableStock = getStockForProduct(product.id);
+      
+      // If replaceExisting is true (from quantity modal), use the exact quantity
+      // Otherwise, add to existing (for clicking products directly)
+      const finalQuantity = replaceExisting ? quantity : (currentQuantityInCart + quantity);
+
+      if (finalQuantity > availableStock) {
+        // Return previous state if over stock - error will be shown below
+        return prev;
+      }
+
+      const existingIndex = prev.findIndex(item => item.id === product.id);
+      if (existingIndex !== -1) {
+        setSelectedCartItemIndex(existingIndex);
+        return prev.map((item, index) => 
+          index === existingIndex 
+            ? { ...item, quantity: finalQuantity } 
+            : item
+        );
+      }
+      setSelectedCartItemIndex(prev.length);
+      // For new items, always use the provided quantity
+      return [...prev, { ...product, quantity }];
+    });
+    
+    // Check if we need to show error (do this after state update)
+    setCart(currentCart => {
+      const cartItem = currentCart.find(item => item.id === product.id);
+      if (!cartItem) {
+        // Item wasn't added, check why
+        const availableStock = getStockForProduct(product.id);
+        const currentQuantityInCart = 0;
+        const finalQuantity = replaceExisting ? quantity : (currentQuantityInCart + quantity);
+        
+        if (finalQuantity > availableStock) {
+          toast({
+            title: 'Out of stock',
+            description: `${product.name} has no more stock available.`,
+            variant: 'destructive',
+          });
+          playError();
+          return currentCart;
         }
-        setSelectedCartItemIndex(prev.length);
-        return [...prev, { ...product, quantity: 1 }];
-      });
-      playBeep();
-    } else {
+      }
+      return currentCart;
+    });
+    
+    playBeep();
+  };
+
+  const handleScannedProduct = (product: Product) => {
+    // Check if product is out of stock BEFORE opening modal
+    const availableStock = getStockForProduct(product.id);
+    if (availableStock <= 0) {
       toast({
-        title: 'Out of stock',
-        description: `${product.name} has no more stock available.`,
+        title: 'Out of Stock',
+        description: `${product.name} is currently out of stock.`,
         variant: 'destructive',
       });
       playError();
+      // Ensure modal is closed
+      setIsQuantityModalOpen(false);
+      setScannedProduct(null);
+      setQuantityInput('');
+      return;
     }
+    
+    // Only open modal if product has stock
+    setScannedProduct(product);
+    setQuantityInput(''); // Empty by default, user must input
+    isProcessingQuantity.current = false; // Reset processing flag
+    setIsQuantityModalOpen(true);
+    // Focus quantity input after modal opens
+    setTimeout(() => quantityInputRef.current?.focus(), 100);
+  };
+
+  const handleQuantityConfirm = () => {
+    // Prevent double calls
+    if (isProcessingQuantity.current) {
+      console.log('handleQuantityConfirm: Already processing, ignoring duplicate call');
+      return;
+    }
+    
+    if (!scannedProduct) {
+      console.log('handleQuantityConfirm: No scanned product');
+      return;
+    }
+    
+    isProcessingQuantity.current = true;
+    
+    // Parse and validate quantity
+    const inputValue = quantityInput.trim();
+    if (!inputValue) {
+      isProcessingQuantity.current = false;
+      toast({
+        title: 'Invalid Quantity',
+        description: 'Please enter a valid quantity greater than 0.',
+        variant: 'destructive',
+      });
+      playError();
+      return;
+    }
+    
+    const qty = parseInt(inputValue, 10);
+    if (isNaN(qty) || qty <= 0) {
+      isProcessingQuantity.current = false;
+      toast({
+        title: 'Invalid Quantity',
+        description: 'Please enter a valid quantity greater than 0.',
+        variant: 'destructive',
+      });
+      playError();
+      return;
+    }
+    
+    const availableStock = getStockForProduct(scannedProduct.id);
+    if (qty > availableStock) {
+      isProcessingQuantity.current = false;
+      toast({
+        title: 'Insufficient Stock',
+        description: `Only ${availableStock} unit(s) available for ${scannedProduct.name}.`,
+        variant: 'destructive',
+      });
+      playError();
+      return;
+    }
+    
+    const productId = scannedProduct.id;
+    const productName = scannedProduct.name;
+    
+    // Directly update cart with EXACT quantity (no addition, no modification)
+    // Use functional update to ensure we have latest cart state
+    setCart(prev => {
+      const existingIndex = prev.findIndex(item => item.id === productId);
+      
+      if (existingIndex !== -1) {
+        // Product exists in cart - REPLACE with exact quantity (not add)
+        const oldQty = prev[existingIndex].quantity;
+        setSelectedCartItemIndex(existingIndex);
+        const updated = prev.map((item, index) => {
+          if (index === existingIndex) {
+            // CRITICAL: Use exact qty value, NEVER add to existing quantity
+            console.log(`[handleQuantityConfirm] REPLACING: ${productName} quantity ${oldQty} -> ${qty}`);
+            return { ...item, quantity: qty };
+          }
+          return item;
+        });
+        return updated;
+      } else {
+        // Product not in cart - add with exact quantity
+        setSelectedCartItemIndex(prev.length);
+        console.log(`[handleQuantityConfirm] ADDING: ${productName} with quantity ${qty}`);
+        return [...prev, { ...scannedProduct, quantity: qty }];
+      }
+    });
+    
+    playBeep();
+    setIsQuantityModalOpen(false);
+    setScannedProduct(null);
+    setQuantityInput('');
+    isProcessingQuantity.current = false;
+    // Keep scanner open for continuous scanning
+  };
+
+  const handleQuantityChange = (delta: number) => {
+    if (!scannedProduct) return;
+    const currentQty = parseInt(quantityInput) || 0;
+    const maxQty = getStockForProduct(scannedProduct.id);
+    const newQty = Math.max(1, Math.min(maxQty, currentQty + delta));
+    setQuantityInput(newQty.toString());
   };
 
   const updateQuantity = (id: string, delta: number) => {
@@ -235,9 +466,21 @@ function PosPage() {
           console.error('POS: Barcode search failed:', error);
         }
       };
-      
-      // Debounce barcode search
-      const timeoutId = setTimeout(handleBarcodeSearch, 300);
+
+      handleBarcodeSearch();
+    }
+  }, [searchQuery]);
+  
+  // Passive barcode scanning: auto-add when a scan hits the input
+  useEffect(() => {
+    if (searchQuery.length >= 3) {
+      const timeoutId = setTimeout(async () => {
+        const found = await findProductByBarcode(searchQuery);
+        if (found) {
+          addToCart(found);
+          setSearchQuery('');
+        }
+      }, 200);
       return () => clearTimeout(timeoutId);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -273,8 +516,11 @@ function PosPage() {
 
       // Save to database
       const response = await (window as any).api.transactions.create(transactionData);
-      
+
       if (response.success) {
+        // Play cash register immediately after persistence to avoid UI lag
+        playKaChing();
+
         const newTransaction: Transaction = {
           id: transactionId,
           date: new Date(),
@@ -286,33 +532,67 @@ function PosPage() {
           change: method === 'cash' ? amountReceived - total : undefined,
           paymentMethod: method,
           referenceNumber: method === 'qr' ? referenceNumber : undefined,
-          status: 'Completed'
+          status: 'Completed',
         };
+
+        addTransactionToStore(newTransaction);
         setTransaction(newTransaction);
         setView('receipt');
         setCart([]);
         playKaChing();
-        
+
         // Refresh products from SQLite to update stock after transaction
         console.log('POS: Refreshing products after transaction...');
-        const productsResponse = await (window as any).api.products.getAll();
-        if (productsResponse && productsResponse.success && Array.isArray(productsResponse.data)) {
-          const mappedProducts: Product[] = productsResponse.data
-            .filter((p: any) => p.is_active !== 0) // Only active products
-            .map((p: any) => ({
-              id: p.id?.toString() ?? '',
-              name: p.name ?? '',
-              code: p.sku || p.barcode || `PROD-${p.id}`,
-              price: Number(p.price ?? p.selling_price ?? 0),
-              stock: Number(p.stock ?? p.stock_quantity ?? 0),
-              barcode: p.barcode ?? '',
-              category: p.category ?? 'Uncategorized',
-              color: undefined,
-            }));
-          console.log(`POS: Refreshed ${mappedProducts.length} products from SQLite`);
-          setProducts(mappedProducts);
-        } else {
-          console.warn('POS: Failed to refresh products after transaction', productsResponse);
+
+        try {
+          // Prefer inventory-style data just like initial load
+          if (typeof window !== 'undefined' && (window as any).api?.products?.getInventory) {
+            const invResponse = await (window as any).api.products.getInventory();
+            console.log('POS: post-transaction getInventory response:', invResponse);
+
+            if (invResponse && invResponse.success && Array.isArray(invResponse.data) && invResponse.data.length > 0) {
+              const mappedProducts: Product[] = invResponse.data.map((p: any) => ({
+                id: p.id?.toString() ?? '',
+                name: p.name ?? '',
+                code: p.sku || p.barcode || `PROD-${p.id}`,
+                price: Number(p.price) || 0,
+                stock: Number(p.stock ?? 0),
+                barcode: p.barcode ?? '',
+                category: p.category ?? 'Uncategorized',
+                color: undefined,
+              }));
+              console.log(`POS: Refreshed ${mappedProducts.length} products via getInventory`);
+              setProducts(mappedProducts);
+            } else {
+              console.log('POS: No products found via getInventory during refresh, falling back to getAll.', invResponse);
+              throw new Error('Empty or invalid getInventory response');
+            }
+          } else {
+            throw new Error('products:getInventory not available');
+          }
+        } catch (refreshError) {
+          console.warn('POS: getInventory refresh failed, falling back to getAll:', refreshError);
+          if (typeof window !== 'undefined' && (window as any).api?.products?.getAll) {
+            const productsResponse = await (window as any).api.products.getAll();
+            if (productsResponse && productsResponse.success && Array.isArray(productsResponse.data)) {
+              const mappedProducts: Product[] = productsResponse.data
+                .filter((p: any) => p.is_active !== 0)
+                .map((p: any) => ({
+                  id: p.id?.toString() ?? '',
+                  name: p.name ?? '',
+                  code: p.sku || p.barcode || `PROD-${p.id}`,
+                  price: Number(p.price ?? p.selling_price ?? 0),
+                  stock: Number(p.stock ?? p.stock_quantity ?? 0),
+                  barcode: p.barcode ?? '',
+                  category: p.category ?? 'Uncategorized',
+                  color: undefined,
+                }));
+              console.log(`POS: Refreshed ${mappedProducts.length} products via getAll`);
+              setProducts(mappedProducts);
+            } else {
+              console.warn('POS: Failed to refresh products via getAll after transaction', productsResponse);
+            }
+          }
         }
       } else {
         throw new Error(response.message || 'Failed to save transaction');
@@ -550,6 +830,7 @@ function PosPage() {
             <span>F1: Pay</span>
             <span>F2: Search</span>
             <span>Tab: Switch Lists</span>
+              <span>Spacebar: Scan</span>
           </div>
         </div>
       </div>
@@ -690,13 +971,153 @@ function PosPage() {
         isOpen={isScannerOpen}
         onClose={() => setIsScannerOpen(false)}
         onScan={(barcode) => {
-          const product = products.find(p => p.barcode === barcode);
-          if (product) {
-            addToCart(product);
+          const normalized = (barcode ?? '').toString().trim();
+          console.log('POS: Scanner modal scanned barcode:', normalized);
+          
+          if (!normalized) {
+            return;
           }
-          setIsScannerOpen(false);
+          
+          const match = products.find(
+            (p) => (p.barcode ?? '').toString().trim() === normalized,
+          );
+          if (match) {
+            handleScannedProduct(match);
+            return;
+          }
+          
+          // Try to find product in database
+          void findProductByBarcode(normalized).then((fallback) => {
+            if (fallback) {
+              handleScannedProduct(fallback);
+            } else {
+              // Product not found in inventory
+              toast({
+                title: 'Product Not Found',
+                description: `No product found with barcode: ${normalized}. Please add it to inventory first.`,
+                variant: 'destructive',
+              });
+              playError();
+              // Ensure quantity modal is closed
+              setIsQuantityModalOpen(false);
+              setScannedProduct(null);
+              setQuantityInput('');
+              isProcessingQuantity.current = false;
+              console.warn('POS: No product found for scanned barcode:', normalized);
+            }
+          });
         }}
       />
+
+      {/* Quantity Input Modal - Higher z-index than scanner */}
+      <Dialog open={isQuantityModalOpen} onOpenChange={(open) => {
+        if (!open) {
+          setIsQuantityModalOpen(false);
+          setScannedProduct(null);
+          setQuantityInput('');
+          isProcessingQuantity.current = false; // Reset when modal closes
+        }
+      }}>
+        <DialogContent className="max-w-md !z-[2000]" style={{ zIndex: 2000 }}>
+          <DialogHeader>
+            <DialogTitle>Enter Quantity</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-6 mt-4">
+            {scannedProduct && (
+              <div className="bg-muted/50 rounded-lg p-4">
+                <p className="text-base font-semibold">{scannedProduct.name}</p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Available: {getStockForProduct(scannedProduct.id)} | Price: {formatCurrency(scannedProduct.price)}
+                </p>
+              </div>
+            )}
+            <div className="space-y-3">
+              <Label htmlFor="quantity" className="text-base font-medium">Quantity</Label>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => handleQuantityChange(-1)}
+                  className="w-14 h-14 rounded-lg border-2 border-primary bg-background hover:bg-primary hover:text-primary-foreground transition-colors flex items-center justify-center text-2xl font-bold text-primary"
+                  disabled={!quantityInput || parseInt(quantityInput) <= 1}
+                >
+                  −
+                </button>
+                <Input
+                  id="quantity"
+                  ref={quantityInputRef}
+                  type="number"
+                  min="1"
+                  step="1"
+                  max={scannedProduct ? getStockForProduct(scannedProduct.id) : 999}
+                  value={quantityInput}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    // Allow empty string or valid numbers
+                    if (val === '' || /^\d+$/.test(val)) {
+                      const numVal = parseInt(val);
+                      if (val === '' || (numVal > 0 && numVal <= (scannedProduct ? getStockForProduct(scannedProduct.id) : 999))) {
+                        setQuantityInput(val);
+                      }
+                    }
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      handleQuantityConfirm();
+                    } else if (e.key === 'Escape') {
+                      e.preventDefault();
+                      setIsQuantityModalOpen(false);
+                      setScannedProduct(null);
+                      setQuantityInput('');
+                    } else if (e.key === 'ArrowUp') {
+                      e.preventDefault();
+                      handleQuantityChange(1);
+                    } else if (e.key === 'ArrowDown') {
+                      e.preventDefault();
+                      handleQuantityChange(-1);
+                    }
+                  }}
+                  className="flex-1 h-14 text-center text-3xl font-bold"
+                  autoFocus
+                />
+                <button
+                  type="button"
+                  onClick={() => handleQuantityChange(1)}
+                  className="w-14 h-14 rounded-lg border-2 border-primary bg-background hover:bg-primary hover:text-primary-foreground transition-colors flex items-center justify-center text-2xl font-bold text-primary"
+                  disabled={!quantityInput || parseInt(quantityInput) >= (scannedProduct ? getStockForProduct(scannedProduct.id) : 999)}
+                >
+                  +
+                </button>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsQuantityModalOpen(false);
+                  setScannedProduct(null);
+                  setQuantityInput('');
+                }}
+                className="px-6 py-2.5 text-sm border border-border rounded-md hover:bg-muted"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  handleQuantityConfirm();
+                }}
+                className="px-6 py-2.5 text-sm bg-primary text-primary-foreground rounded-md hover:bg-primary/90 font-medium"
+              >
+                Add to Cart
+              </button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
     </>
   );
