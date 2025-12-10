@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { BrowserMultiFormatReader, NotFoundException } from '@zxing/library';
-import { X } from 'lucide-react';
+import { X, Camera, CameraOff } from 'lucide-react';
 
 interface BarcodeScannerModalProps {
   isOpen: boolean;
@@ -12,127 +11,77 @@ interface BarcodeScannerModalProps {
 }
 
 const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({ isOpen, onClose, onAdd, onSearch, onScan }) => {
-  const videoRef = useRef<HTMLVideoElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
-  const codeReader = new BrowserMultiFormatReader();
-  const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
-  const [selectedDeviceId, setSelectedDeviceId] = useState<string | undefined>(undefined);
+  const manualInputRef = useRef<HTMLInputElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
   const [manualValue, setManualValue] = useState("");
   const [scannedValue, setScannedValue] = useState<string>("");
-  const [errorMsg, setErrorMsg] = useState<string>("");
-  const manualInputRef = useRef<HTMLInputElement>(null);
-  const [isManualEditing, setIsManualEditing] = useState(false);
-  const isManualEditingRef = useRef(false);
-  useEffect(() => {
-    isManualEditingRef.current = isManualEditing;
-  }, [isManualEditing]);
+  const [cameraEnabled, setCameraEnabled] = useState(false);
+  const [cameraError, setCameraError] = useState<string | null>(null);
 
+  // Initialize camera when modal opens
   useEffect(() => {
-    if (isOpen) {
-      void initDevices();
-    } else {
-      codeReader.reset();
+    if (!isOpen) {
+      // Stop camera when modal closes
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+        streamRef.current = null;
+      }
+      setCameraEnabled(false);
+      setCameraError(null);
+      return;
     }
 
+    const initCamera = async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: 'environment', // Use back camera on mobile
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
+          }
+        });
+        
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          streamRef.current = stream;
+          setCameraEnabled(true);
+          setCameraError(null);
+        }
+      } catch (error: any) {
+        console.error('Camera access error:', error);
+        setCameraEnabled(false);
+        if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
+          setCameraError('Camera permission denied. Please allow camera access in your browser settings.');
+        } else if (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError') {
+          setCameraError('No camera found. Please use a USB barcode scanner or type manually.');
+        } else {
+          setCameraError('Camera access failed. Please use a USB barcode scanner or type manually.');
+        }
+        // Focus manual input if camera fails
+        setTimeout(() => manualInputRef.current?.focus(), 100);
+      }
+    };
+
+    initCamera();
+
     return () => {
-      codeReader.reset();
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+        streamRef.current = null;
+      }
     };
   }, [isOpen]);
 
-  // When opening, focus manual input so typing works immediately
+  // When opening, focus manual input so typing works immediately (if camera is disabled)
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen || cameraEnabled) return;
     const id = window.requestAnimationFrame(() => manualInputRef.current?.focus());
     return () => window.cancelAnimationFrame(id);
-  }, [isOpen]);
+  }, [isOpen, cameraEnabled]);
 
-  useEffect(() => {
-    if (!isOpen) return;
-    if (selectedDeviceId) {
-      startScanner(selectedDeviceId);
-    }
-  }, [selectedDeviceId, isOpen]);
-  const initDevices = async () => {
-    try {
-      let videoInputDevices = await codeReader.listVideoInputDevices();
-      // If devices list is empty or DroidCam likely just started, warm up permissions and retry
-      if (!videoInputDevices.length) {
-        try {
-          await navigator.mediaDevices.getUserMedia({ video: true });
-          videoInputDevices = await codeReader.listVideoInputDevices();
-        } catch {
-          // ignore, we'll surface the error below
-        }
-      }
-      setDevices(videoInputDevices);
-      const saved = localStorage.getItem('scannerDeviceId') || undefined;
-      const droid = videoInputDevices.find(d => /droidcam/i.test(d.label));
-      const initial =
-        videoInputDevices.find(d => d.deviceId === saved)?.deviceId ||
-        droid?.deviceId ||
-        videoInputDevices[0]?.deviceId;
-      setSelectedDeviceId(initial);
-      if (!videoInputDevices.length) {
-        setErrorMsg('No camera found. Start your webcam or DroidCam, then reopen the scanner.');
-      } else {
-        setErrorMsg('');
-      }
-    } catch (err) {
-      console.error('Error initializing scanner:', err);
-      setErrorMsg('Failed to initialize camera. Please allow camera permissions.');
-    }
-  };
-
-  // When open, react to system camera changes (e.g., DroidCam connects)
-  useEffect(() => {
-    if (!isOpen) return;
-    const handler = () => { void initDevices(); };
-    if (navigator.mediaDevices && 'addEventListener' in navigator.mediaDevices) {
-      navigator.mediaDevices.addEventListener('devicechange', handler);
-    } else if (navigator.mediaDevices && 'ondevicechange' in navigator.mediaDevices) {
-      // @ts-ignore legacy
-      navigator.mediaDevices.ondevicechange = handler;
-    }
-    return () => {
-      if (navigator.mediaDevices && 'removeEventListener' in navigator.mediaDevices) {
-        navigator.mediaDevices.removeEventListener('devicechange', handler);
-      } else if (navigator.mediaDevices && 'ondevicechange' in navigator.mediaDevices) {
-        // @ts-ignore legacy
-        navigator.mediaDevices.ondevicechange = null;
-      }
-    };
-  }, [isOpen]);
-
-  const startScanner = async (deviceId: string) => {
-    try {
-      codeReader.reset();
-      localStorage.setItem('scannerDeviceId', deviceId);
-      const target = videoRef.current;
-      if (target) {
-        target.setAttribute('playsinline', 'true');
-        // @ts-ignore
-        target.autoplay = true;
-        // @ts-ignore
-        target.muted = true;
-      }
-      codeReader.decodeFromVideoDevice(deviceId || undefined, target, (result, err) => {
-        if (result) {
-          if (!isManualEditingRef.current) {
-            const text = result.getText();
-            setScannedValue(text);
-            codeReader.reset();
-          }
-        }
-        if (err && !(err instanceof NotFoundException)) {
-          console.error('Barcode scan error:', err);
-        }
-      });
-    } catch (err) {
-      console.error('Error starting scanner:', err);
-      setErrorMsg('Unable to start camera. Try a different device in the dropdown.');
-    }
-  };
-
+  // Trap pointer/keyboard events inside the modal
   useEffect(() => {
     if (!isOpen) return;
     const handlePointerDownCapture = (ev: Event) => {
@@ -142,7 +91,6 @@ const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({ isOpen, onClo
     };
     const handleKeyDownCapture = (ev: KeyboardEvent) => {
       if (!wrapperRef.current) return;
-      // If focus is within scanner modal
       const active = document.activeElement as Node | null;
       const isInside = active && wrapperRef.current.contains(active);
       if (isInside && ev.key === 'Escape') {
@@ -161,64 +109,92 @@ const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({ isOpen, onClo
     };
   }, [isOpen, onClose]);
 
+  // POS auto-add: when used with onScan (and no onAdd/onSearch),
+  // automatically fire onScan shortly after the input has a value,
+  // then clear and refocus so staff can keep scanning.
+  useEffect(() => {
+    if (!isOpen) return;
+    if (!onScan || onAdd || onSearch) return;
+
+    const value = (scannedValue || manualValue).trim();
+    if (!value) return;
+
+    const timeoutId = window.setTimeout(() => {
+      const latest = (scannedValue || manualValue).trim();
+      if (!latest) return;
+      onScan(latest);
+      setManualValue("");
+      setScannedValue("");
+      setTimeout(() => manualInputRef.current?.focus(), 0);
+    }, 200);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [isOpen, onScan, onAdd, onSearch, scannedValue, manualValue]);
+
   if (!isOpen) return null;
 
+  const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+
+    const value = (scannedValue || manualValue).trim();
+    if (!value) return;
+
+    if (onAdd) {
+      onAdd(value);
+      onClose();
+    } else if (onSearch) {
+      onSearch(value);
+      onClose();
+    } else if (onScan) {
+      onScan(value);
+      // Keep modal open for continuous scanning in POS
+    }
+
+    setManualValue("");
+    setScannedValue("");
+    setTimeout(() => manualInputRef.current?.focus(), 0);
+  };
+
+  const currentValue = (scannedValue || manualValue).trim();
+
   return createPortal(
-    <div ref={wrapperRef} className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-[1000] pointer-events-auto">
+    <div ref={wrapperRef} className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-[1000] pointer-events-auto" style={{ zIndex: 1000 }}>
       <div className="bg-card p-4 rounded-lg shadow-xl relative w-full max-w-md" onClick={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()}>
         <h2 className="text-lg font-bold text-center mb-4">Scan Barcode</h2>
-        <div className="mb-3 flex gap-2 items-center">
-          <select
-            className="flex-1 border border-border rounded-md px-3 py-2 bg-background"
-            value={selectedDeviceId}
-            onChange={(e) => {
-              const id = e.target.value;
-              setSelectedDeviceId(id);
-              localStorage.setItem('scannerDeviceId', id);
-            }}
-            disabled={!devices.length}
-          >
-            {devices.length === 0 ? (
-              <option>Select camera (none found)</option>
-            ) : (
-              devices.map((d) => (
-                <option key={d.deviceId} value={d.deviceId}>{d.label || 'Camera'}</option>
-              ))
-            )}
-          </select>
-          <button
-            type="button"
-            className="px-3 py-2 rounded-md border border-border bg-background"
-            title="Refresh cameras"
-            onClick={() => { void initDevices(); }}
-          >
-            Refresh
-          </button>
-        </div>
-        <div className="relative">
-          <video ref={videoRef} className="w-full rounded-md bg-black" playsInline autoPlay muted />
-          {/* Scan guide overlay */}
-          <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-            <div className="relative w-[85%] max-w-[520px] h-28 sm:h-32 md:h-36 border-2 border-primary/60 rounded-md">
-              <div className="absolute -top-1 -left-1 w-8 h-8 border-t-4 border-l-4 border-primary/70 rounded-tl"></div>
-              <div className="absolute -top-1 -right-1 w-8 h-8 border-t-4 border-r-4 border-primary/70 rounded-tr"></div>
-              <div className="absolute -bottom-1 -left-1 w-8 h-8 border-b-4 border-l-4 border-primary/70 rounded-bl"></div>
-              <div className="absolute -bottom-1 -right-1 w-8 h-8 border-b-4 border-r-4 border-primary/70 rounded-br"></div>
-              <div className="absolute left-0 right-0 top-1/2 -translate-y-1/2 h-[2px] bg-primary/60"></div>
-            </div>
+
+        {cameraEnabled && videoRef.current ? (
+          <div className="mb-3 relative bg-black rounded-lg overflow-hidden aspect-video">
+            <video
+              ref={videoRef}
+              autoPlay
+              playsInline
+              className="w-full h-full object-cover"
+            />
+            <div className="absolute inset-0 border-2 border-primary/50 rounded-lg pointer-events-none" />
           </div>
-        </div>
-        {errorMsg && (
-          <p className="mt-2 text-sm text-destructive">{errorMsg}</p>
+        ) : (
+          <div className="mb-3 text-sm text-muted-foreground bg-muted/40 border border-border rounded-md p-3 space-y-1">
+            <p className="font-medium flex items-center gap-2">
+              {cameraError ? <CameraOff className="w-4 h-4" /> : <Camera className="w-4 h-4" />}
+              {cameraError ? 'Camera unavailable' : 'Camera scanning disabled'}
+            </p>
+            <p>
+              {cameraError || 'Please use a USB barcode scanner or the Barcode to PC mobile app. You can also type the barcode manually below.'}
+            </p>
+          </div>
         )}
+
         <div className="mt-3 flex items-center gap-2">
           <input
             type="text"
             ref={manualInputRef}
             value={scannedValue || manualValue}
-            onFocus={() => { setIsManualEditing(true); codeReader.reset(); }}
-            onBlur={() => { setIsManualEditing(false); if (selectedDeviceId) startScanner(selectedDeviceId); }}
-            onChange={(e) => { setScannedValue(""); setManualValue(e.target.value); }}
+            onKeyDown={handleInputKeyDown}
+            onChange={(e) => {
+              setScannedValue("");
+              setManualValue(e.target.value);
+            }}
             placeholder="Type barcode manually"
             className="flex-1 border border-border rounded-md px-3 py-2 bg-background"
           />
@@ -226,11 +202,9 @@ const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({ isOpen, onClo
             className="px-3 py-2 rounded-md bg-secondary"
             onMouseDown={(e) => { e.preventDefault(); }}
             onClick={() => {
-              // Enter manual-edit mode: keep manual input, clear scanned value, pause camera
+              // Clear and focus manual input for a new entry
               setScannedValue("");
-              setIsManualEditing(true);
-              codeReader.reset();
-              // Return focus to manual input for immediate typing
+              setManualValue("");
               setTimeout(() => manualInputRef.current?.focus(), 0);
             }}
           >
@@ -238,41 +212,48 @@ const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({ isOpen, onClo
           </button>
         </div>
 
-        <div className="mt-3 grid grid-cols-2 gap-2">
-          <button
-            className="px-3 py-2 rounded-md bg-primary text-primary-foreground"
-            onClick={() => {
-              const v = (scannedValue || manualValue).trim();
-              if (!v) return;
-              if (onAdd) onAdd(v); else if (onScan) onScan(v);
-              onClose();
-              setManualValue("");
-              setScannedValue("");
-            }}
-          >
-            Add Product
-          </button>
-          <button
-            className="px-3 py-2 rounded-md bg-muted"
-            onClick={() => {
-              const v = (scannedValue || manualValue).trim();
-              if (!v) return;
-              if (onSearch) onSearch(v); else if (onScan) onScan(v);
-              onClose();
-              setManualValue("");
-              setScannedValue("");
-            }}
-          >
-            Search Product
-          </button>
-        </div>
+        {/* Only show action buttons if not in POS mode (onScan only) */}
+        {onAdd || onSearch ? (
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            {onAdd && (
+              <button
+                className="px-3 py-2 rounded-md bg-primary text-primary-foreground"
+                onClick={() => {
+                  if (!currentValue) return;
+                  onAdd(currentValue);
+                  onClose();
+                  setManualValue("");
+                  setScannedValue("");
+                }}
+              >
+                Add Product
+              </button>
+            )}
+            {onSearch && (
+              <button
+                className="px-3 py-2 rounded-md bg-muted"
+                onClick={() => {
+                  if (!currentValue) return;
+                  onSearch(currentValue);
+                  onClose();
+                  setManualValue("");
+                  setScannedValue("");
+                }}
+              >
+                Search Product
+              </button>
+            )}
+          </div>
+        ) : null}
         <button 
           onClick={onClose} 
           className="absolute top-2 right-2 bg-card/50 p-2 rounded-full text-muted-foreground hover:bg-muted transition-colors"
         >
           <X size={20} />
         </button>
-        <p className="text-center text-sm text-muted-foreground mt-2">Align the barcode inside the box. Choose DroidCam in the dropdown if needed.</p>
+        <p className="text-center text-sm text-muted-foreground mt-2">
+          Staff note: camera scanning is disabled. Use a USB scanner or the Barcode to PC mobile app, or type the barcode manually.
+        </p>
       </div>
     </div>,
     document.body

@@ -21,6 +21,63 @@ const ReceiptModal: React.FC<ReceiptModalProps> = ({ transaction, onClose }) => 
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [onClose]);
 
+  const handleSavePdf = () => {
+    // Open a lightweight window with the receipt content and trigger print (Save as PDF)
+    const w = window.open('', '_blank', 'width=480,height=800') as any;
+    if (!w || !w.document) return;
+    w.document.write(`
+      <html>
+        <head>
+          <title>Receipt</title>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 16px; background: #fff; color: #333; }
+            .receipt { width: 380px; margin: 0 auto; border-top: 6px solid #fcd9a5; padding: 16px; }
+            .row { display: flex; justify-content: space-between; margin: 4px 0; font-size: 12px; }
+            .items { border-top: 1px dashed #ccc; border-bottom: 1px dashed #ccc; padding: 8px 0; margin: 12px 0; font-size: 12px; }
+            .items div { display: flex; justify-content: space-between; margin: 4px 0; }
+            .total { font-weight: bold; font-size: 14px; }
+          </style>
+        </head>
+        <body>
+          <div class="receipt">
+            <h3 style="text-align:center;margin:0 0 4px;">LW Mini Mart</h3>
+            <p style="text-align:center;margin:0 0 12px;font-size:12px;">Jose Del Mar Avenue, Cebu City<br/>Date: ${transaction.date.toLocaleString()}</p>
+            <div class="items">
+              ${transaction.items
+                .map(
+                  (item) =>
+                    `<div><span>${item.quantity}x ${item.name}</span><span>${formatCurrency(
+                      item.price * item.quantity
+                    )}</span></div>`
+                )
+                .join('')}
+            </div>
+            <div class="row total"><span>Total Due</span><span>${formatCurrency(transaction.total)}</span></div>
+            ${
+              transaction.paymentMethod === 'cash'
+                ? `<div class="row"><span>Cash Received</span><span>${formatCurrency(
+                    transaction.cashReceived || 0
+                  )}</span></div>
+                   <div class="row"><span>Change</span><span>${formatCurrency(
+                     transaction.change || 0
+                   )}</span></div>`
+                : `<div class="row"><span>Payment Method</span><span>QR Code</span></div>
+                   ${
+                     transaction.referenceNumber
+                       ? `<div class="row"><span>Reference</span><span>${transaction.referenceNumber}</span></div>`
+                       : ''
+                   }`
+            }
+            <p style="text-align:center;font-size:11px;margin-top:12px;color:#777;">Thank you for shopping with us!</p>
+          </div>
+        </body>
+      </html>
+    `);
+    w.document.close();
+    w.focus();
+    w.print();
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-[#FDFBF7] animate-in fade-in duration-300 overflow-y-auto">
       {/* Header */}
@@ -43,11 +100,11 @@ const ReceiptModal: React.FC<ReceiptModalProps> = ({ transaction, onClose }) => 
              <h2 className="font-bold text-xl uppercase tracking-widest text-stone-900">lifewood</h2>
              <h3 className="font-mono font-bold text-lg mt-1">LW Mini Mart</h3>
              <p className="font-mono text-xs text-stone-500 text-center mt-1">
-               123 Market St, Commerce City<br/>
+               Jose Del Mar Avenue, Cebu City<br/>
                Date: {transaction.date.toLocaleString()}
              </p>
           </div>
-
+    
           <div className="border-t border-b border-dashed border-stone-300 py-4 mb-4 font-mono text-xs space-y-2">
             {transaction.items.map(item => (
               <div key={item.id} className="flex justify-between">
@@ -105,7 +162,10 @@ const ReceiptModal: React.FC<ReceiptModalProps> = ({ transaction, onClose }) => 
            >
              <Printer size={18} /> Print
            </button>
-           <button className="bg-white border border-stone-300 text-stone-700 px-8 py-3 rounded-lg font-bold shadow-sm hover:bg-stone-50 flex items-center gap-2 transition-all">
+          <button
+            onClick={handleSavePdf}
+            className="bg-white border border-stone-300 text-stone-700 px-8 py-3 rounded-lg font-bold shadow-sm hover:bg-stone-50 flex items-center gap-2 transition-all"
+          >
              <Download size={18} /> Save as PDF
            </button>
         </div>
