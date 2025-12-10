@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Product, CartItem, Transaction, ViewState } from '@/integrations/supabase/types'; 
 import { TAX_RATE } from '@/constants';
 import { useTransactionStore } from '@/stores/transactionStore';
-import { toast } from 'sonner';
+import { useToast } from '@/components/ui/use-toast';
 
 import ProductCard from '@/components/ProductCard';
 import CartItemComponent from '@/components/CartItem';
@@ -25,6 +25,7 @@ function PosPage() {
   const [transaction, setTransaction] = useState<Transaction | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
   const kaChingAudioRef = useRef<HTMLAudioElement | null>(null);
+  const { toast } = useToast();
 
   const [selectedCartItemIndex, setSelectedCartItemIndex] = useState<number | null>(null);
   const [selectedProductIndex, setSelectedProductIndex] = useState<number | null>(0);
@@ -33,8 +34,9 @@ function PosPage() {
   const [loading, setLoading] = useState(true);
   const [isQuantityModalOpen, setIsQuantityModalOpen] = useState(false);
   const [scannedProduct, setScannedProduct] = useState<Product | null>(null);
-  const [quantityInput, setQuantityInput] = useState('1');
+  const [quantityInput, setQuantityInput] = useState('');
   const quantityInputRef = useRef<HTMLInputElement>(null);
+  const isProcessingQuantity = useRef(false);
 
   const addTransactionToStore = useTransactionStore((state) => state.addTransaction);
 
@@ -211,81 +213,119 @@ function PosPage() {
 
   // Cart Actions
   const addToCart = (product: Product, quantity: number = 1, replaceExisting: boolean = false) => {
-    const cartItem = cart.find(item => item.id === product.id);
-    const currentQuantityInCart = cartItem ? cartItem.quantity : 0;
-    const availableStock = getStockForProduct(product.id);
-    
-    // If replaceExisting is true (from quantity modal), use the exact quantity
-    // Otherwise, add to existing (for clicking products directly)
-    const newQuantity = replaceExisting ? quantity : (currentQuantityInCart + quantity);
+    setCart(prev => {
+      const cartItem = prev.find(item => item.id === product.id);
+      const currentQuantityInCart = cartItem ? cartItem.quantity : 0;
+      const availableStock = getStockForProduct(product.id);
+      
+      // If replaceExisting is true (from quantity modal), use the exact quantity
+      // Otherwise, add to existing (for clicking products directly)
+      const finalQuantity = replaceExisting ? quantity : (currentQuantityInCart + quantity);
 
-    if (newQuantity <= availableStock) {
-      setCart(prev => {
-        const existingIndex = prev.findIndex(item => item.id === product.id);
-        if (existingIndex !== -1) {
-          setSelectedCartItemIndex(existingIndex);
-          return prev.map((item, index) => 
-            index === existingIndex 
-              ? { ...item, quantity: newQuantity } 
-              : item
-          );
+      if (finalQuantity > availableStock) {
+        // Return previous state if over stock - error will be shown below
+        return prev;
+      }
+
+      const existingIndex = prev.findIndex(item => item.id === product.id);
+      if (existingIndex !== -1) {
+        setSelectedCartItemIndex(existingIndex);
+        return prev.map((item, index) => 
+          index === existingIndex 
+            ? { ...item, quantity: finalQuantity } 
+            : item
+        );
+      }
+      setSelectedCartItemIndex(prev.length);
+      // For new items, always use the provided quantity
+      return [...prev, { ...product, quantity }];
+    });
+    
+    // Check if we need to show error (do this after state update)
+    setCart(currentCart => {
+      const cartItem = currentCart.find(item => item.id === product.id);
+      if (!cartItem) {
+        // Item wasn't added, check why
+        const availableStock = getStockForProduct(product.id);
+        const currentQuantityInCart = 0;
+        const finalQuantity = replaceExisting ? quantity : (currentQuantityInCart + quantity);
+        
+        if (finalQuantity > availableStock) {
+          toast({
+            title: 'Out of stock',
+            description: `${product.name} has no more stock available.`,
+            variant: 'destructive',
+          });
+          playError();
+          return currentCart;
         }
-        setSelectedCartItemIndex(prev.length);
-        return [...prev, { ...product, quantity }];
-      });
-      playBeep();
-    } else {
-      toast.error(`${product.name} has no more stock available.`, {
-        duration: 4000,
-        style: {
-          fontSize: '16px',
-          padding: '16px 20px',
-          minWidth: '350px',
-          fontWeight: '600',
-          backgroundColor: '#fee2e2',
-          border: '1px solid #fca5a5',
-          color: '#991b1b',
-        },
-      });
-      playError();
-    }
+      }
+      return currentCart;
+    });
+    
+    playBeep();
   };
 
   const handleScannedProduct = (product: Product) => {
-    // Check if product is out of stock
+    // Check if product is out of stock BEFORE opening modal
     const availableStock = getStockForProduct(product.id);
     if (availableStock <= 0) {
-      toast.error(`${product.name} is currently out of stock.`, {
-        duration: 4000,
-        style: {
-          fontSize: '16px',
-          padding: '16px 20px',
-          minWidth: '350px',
-          fontWeight: '600',
-          backgroundColor: '#fee2e2',
-          border: '1px solid #fca5a5',
-          color: '#991b1b',
-        },
+      toast({
+        title: 'Out of Stock',
+        description: `${product.name} is currently out of stock.`,
+        variant: 'destructive',
       });
       playError();
+      // Ensure modal is closed
+      setIsQuantityModalOpen(false);
+      setScannedProduct(null);
+      setQuantityInput('');
       return;
     }
     
+    // Only open modal if product has stock
     setScannedProduct(product);
     setQuantityInput(''); // Empty by default, user must input
+    isProcessingQuantity.current = false; // Reset processing flag
     setIsQuantityModalOpen(true);
     // Focus quantity input after modal opens
     setTimeout(() => quantityInputRef.current?.focus(), 100);
   };
 
   const handleQuantityConfirm = () => {
-    if (!scannedProduct) return;
-    const qty = parseInt(quantityInput);
+    // Prevent double calls
+    if (isProcessingQuantity.current) {
+      console.log('handleQuantityConfirm: Already processing, ignoring duplicate call');
+      return;
+    }
     
-    // Validate quantity input
-    if (!quantityInput || isNaN(qty) || qty <= 0) {
-      toast.error('Please enter a valid quantity greater than 0.', {
-        duration: 3000,
+    if (!scannedProduct) {
+      console.log('handleQuantityConfirm: No scanned product');
+      return;
+    }
+    
+    isProcessingQuantity.current = true;
+    
+    // Parse and validate quantity
+    const inputValue = quantityInput.trim();
+    if (!inputValue) {
+      isProcessingQuantity.current = false;
+      toast({
+        title: 'Invalid Quantity',
+        description: 'Please enter a valid quantity greater than 0.',
+        variant: 'destructive',
+      });
+      playError();
+      return;
+    }
+    
+    const qty = parseInt(inputValue, 10);
+    if (isNaN(qty) || qty <= 0) {
+      isProcessingQuantity.current = false;
+      toast({
+        title: 'Invalid Quantity',
+        description: 'Please enter a valid quantity greater than 0.',
+        variant: 'destructive',
       });
       playError();
       return;
@@ -293,23 +333,50 @@ function PosPage() {
     
     const availableStock = getStockForProduct(scannedProduct.id);
     if (qty > availableStock) {
-      toast.error(`Only ${availableStock} unit(s) available for ${scannedProduct.name}.`, {
-        duration: 4000,
-        style: {
-          backgroundColor: '#fee2e2',
-          border: '1px solid #fca5a5',
-          color: '#991b1b',
-        },
+      isProcessingQuantity.current = false;
+      toast({
+        title: 'Insufficient Stock',
+        description: `Only ${availableStock} unit(s) available for ${scannedProduct.name}.`,
+        variant: 'destructive',
       });
       playError();
       return;
     }
     
-    // Use replaceExisting=true to set the exact quantity instead of adding
-    addToCart(scannedProduct, qty, true);
+    const productId = scannedProduct.id;
+    const productName = scannedProduct.name;
+    
+    // Directly update cart with EXACT quantity (no addition, no modification)
+    // Use functional update to ensure we have latest cart state
+    setCart(prev => {
+      const existingIndex = prev.findIndex(item => item.id === productId);
+      
+      if (existingIndex !== -1) {
+        // Product exists in cart - REPLACE with exact quantity (not add)
+        const oldQty = prev[existingIndex].quantity;
+        setSelectedCartItemIndex(existingIndex);
+        const updated = prev.map((item, index) => {
+          if (index === existingIndex) {
+            // CRITICAL: Use exact qty value, NEVER add to existing quantity
+            console.log(`[handleQuantityConfirm] REPLACING: ${productName} quantity ${oldQty} -> ${qty}`);
+            return { ...item, quantity: qty };
+          }
+          return item;
+        });
+        return updated;
+      } else {
+        // Product not in cart - add with exact quantity
+        setSelectedCartItemIndex(prev.length);
+        console.log(`[handleQuantityConfirm] ADDING: ${productName} with quantity ${qty}`);
+        return [...prev, { ...scannedProduct, quantity: qty }];
+      }
+    });
+    
+    playBeep();
     setIsQuantityModalOpen(false);
     setScannedProduct(null);
     setQuantityInput('');
+    isProcessingQuantity.current = false;
     // Keep scanner open for continuous scanning
   };
 
@@ -335,13 +402,10 @@ function PosPage() {
       }
 
       if (newQty > availableStock) {
-        toast.error(`Only ${availableStock} in stock for ${item.name}.`, {
-          duration: 4000,
-          style: {
-            backgroundColor: '#fee2e2',
-            border: '1px solid #fca5a5',
-            color: '#991b1b',
-          },
+        toast({
+          title: 'Stock limit reached',
+          description: `Only ${availableStock} in stock for ${item.name}.`,
+          variant: 'destructive',
         });
         playError();
         return prev;
@@ -928,19 +992,17 @@ function PosPage() {
               handleScannedProduct(fallback);
             } else {
               // Product not found in inventory
-              toast.warning(`Product not found! Please add it to inventory first.`, {
-                duration: 5000,
-                style: {
-                  fontSize: '16px',
-                  padding: '16px 20px',
-                  minWidth: '400px',
-                  fontWeight: '600',
-                  backgroundColor: '#fef3c7',
-                  border: '1px solid #fcd34d',
-                  color: '#92400e',
-                },
+              toast({
+                title: 'Product Not Found',
+                description: `No product found with barcode: ${normalized}. Please add it to inventory first.`,
+                variant: 'destructive',
               });
               playError();
+              // Ensure quantity modal is closed
+              setIsQuantityModalOpen(false);
+              setScannedProduct(null);
+              setQuantityInput('');
+              isProcessingQuantity.current = false;
               console.warn('POS: No product found for scanned barcode:', normalized);
             }
           });
@@ -953,6 +1015,7 @@ function PosPage() {
           setIsQuantityModalOpen(false);
           setScannedProduct(null);
           setQuantityInput('');
+          isProcessingQuantity.current = false; // Reset when modal closes
         }
       }}>
         <DialogContent className="max-w-md !z-[2000]" style={{ zIndex: 2000 }}>
@@ -984,6 +1047,7 @@ function PosPage() {
                   ref={quantityInputRef}
                   type="number"
                   min="1"
+                  step="1"
                   max={scannedProduct ? getStockForProduct(scannedProduct.id) : 999}
                   value={quantityInput}
                   onChange={(e) => {
@@ -999,8 +1063,10 @@ function PosPage() {
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') {
                       e.preventDefault();
+                      e.stopPropagation();
                       handleQuantityConfirm();
                     } else if (e.key === 'Escape') {
+                      e.preventDefault();
                       setIsQuantityModalOpen(false);
                       setScannedProduct(null);
                       setQuantityInput('');
@@ -1039,7 +1105,11 @@ function PosPage() {
               </button>
               <button
                 type="button"
-                onClick={handleQuantityConfirm}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  handleQuantityConfirm();
+                }}
                 className="px-6 py-2.5 text-sm bg-primary text-primary-foreground rounded-md hover:bg-primary/90 font-medium"
               >
                 Add to Cart
