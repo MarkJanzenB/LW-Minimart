@@ -459,8 +459,16 @@ function PosPage() {
             console.log('POS: Adding product to cart via barcode:', mappedProduct);
             addToCart(mappedProduct);
             setSearchQuery(''); // Clear search after adding
+            // Refocus search input after barcode scan to allow rapid scanning
+            setTimeout(() => {
+              searchInputRef.current?.focus();
+            }, 0);
           } else {
             console.log('POS: No product found for barcode:', searchQuery);
+            // Keep focus in search input even if product not found
+            setTimeout(() => {
+              searchInputRef.current?.focus();
+            }, 0);
           }
         } catch (error) {
           console.error('POS: Barcode search failed:', error);
@@ -479,6 +487,10 @@ function PosPage() {
         if (found) {
           addToCart(found);
           setSearchQuery('');
+          // Refocus search input after adding to allow rapid scanning
+          setTimeout(() => {
+            searchInputRef.current?.focus();
+          }, 0);
         }
       }, 200);
       return () => clearTimeout(timeoutId);
@@ -731,13 +743,22 @@ function PosPage() {
   const handleSearchEnter = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && searchQuery) {
       e.preventDefault();
+      e.stopPropagation(); // Prevent event from bubbling to global handler
       const product = products.find(p => p.barcode === searchQuery);
       if (product) {
         addToCart(product);
         setSearchQuery('');
+        // Refocus search input after adding product to allow rapid entry
+        setTimeout(() => {
+          searchInputRef.current?.focus();
+        }, 0);
       } else {
         // Handle product not found by maybe showing a toast notification
         console.log('Product not found');
+        // Keep focus in search input even if product not found
+        setTimeout(() => {
+          searchInputRef.current?.focus();
+        }, 0);
       }
     }
   };
@@ -745,6 +766,12 @@ function PosPage() {
   useEffect(() => {
     const handleGlobalKeys = (e: KeyboardEvent) => {
       if (view !== 'pos') return;
+
+      // Don't handle Enter if search input is focused (let handleSearchEnter handle it)
+      const isSearchInputFocused = document.activeElement === searchInputRef.current;
+      if (e.key === 'Enter' && isSearchInputFocused) {
+        return; // Let the search input handle Enter key
+      }
 
       if (e.key === ' ' || e.key === 'Spacebar') {
         e.preventDefault();
