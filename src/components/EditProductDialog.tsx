@@ -187,6 +187,8 @@ export function EditProductDialog({
         price: isNaN(priceValue) ? 0 : priceValue,
         minStock: isNaN(minStockValue) ? 0 : minStockValue,
         imageUrl: formData.imageUrl || undefined,
+        // Pass expiry date so backend can update batches
+        expiryDate: formData.expiryDate || undefined,
       };
 
       // Use SQLite API (single source of truth)
