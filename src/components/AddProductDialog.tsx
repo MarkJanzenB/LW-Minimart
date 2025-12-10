@@ -374,6 +374,18 @@ export function AddProductDialog({ isOpen, onClose, onProductAdded }: AddProduct
             });
 
             if (batchResponse.success) {
+              // Record restock history in local store
+              await dbService.addRestockRecord({
+                productId: existingProduct.id,
+                productName: existingProduct.name,
+                originalSku: existingProduct.sku,
+                restockSku: existingProduct.sku,
+                quantity: additionalStock,
+                batchNo: generatedBatchNo,
+                expiryDate: restockData.expiryDate || existingProduct.expiryDate || '',
+                barcode: restockData.barcode || existingProduct.barcode,
+              });
+
               toast.success('Product restocked successfully');
               onProductAdded();
               setIsRestockDialogOpen(false);
@@ -398,6 +410,18 @@ export function AddProductDialog({ isOpen, onClose, onProductAdded }: AddProduct
             });
 
             if (createResponse.success) {
+              // Record restock history for newly created product
+              await dbService.addRestockRecord({
+                productId: existingProduct.id,
+                productName: existingProduct.name,
+                originalSku: existingProduct.sku,
+                restockSku: existingProduct.sku,
+                quantity: additionalStock,
+                batchNo: generatedBatchNo,
+                expiryDate: restockData.expiryDate || existingProduct.expiryDate || '',
+                barcode: restockData.barcode || existingProduct.barcode,
+              });
+
               toast.success('Product restocked successfully');
               onProductAdded();
               setIsRestockDialogOpen(false);
@@ -441,6 +465,17 @@ export function AddProductDialog({ isOpen, onClose, onProductAdded }: AddProduct
           batchNo: generatedBatchNo,
           barcode: restockData.barcode,
           imageUrl: existingProduct.imageUrl,
+        });
+        // Record restock history for IndexedDB-only restock
+        await dbService.addRestockRecord({
+          productId: existingProduct.id,
+          productName: existingProduct.name,
+          originalSku: existingProduct.sku,
+          restockSku,
+          quantity: additionalStock,
+          batchNo: generatedBatchNo,
+          expiryDate: restockData.expiryDate || existingProduct.expiryDate || '',
+          barcode: restockData.barcode || existingProduct.barcode,
         });
         toast.success('Product restocked successfully (local only)');
         onProductAdded();
