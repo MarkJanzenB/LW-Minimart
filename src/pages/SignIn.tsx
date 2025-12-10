@@ -77,13 +77,20 @@ const SignIn = () => {
         
         {/* Dark Overlay with Back Button */}
         <div className="absolute inset-0 bg-black/40">
-          <Link
-            to="/"
+          <Button
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              // Set sessionStorage to persist across refreshes
+              sessionStorage.setItem("lw-minimart-manual-nav-to-landing", "true");
+              navigate("/", { state: { fromBackButton: true } });
+            }}
+            variant="ghost"
             className="absolute top-6 left-6 z-20 inline-flex items-center gap-2 rounded-full bg-white/90 px-4 py-2 text-sm font-medium text-foreground shadow-lg transition hover:bg-white dark:bg-foreground/80 dark:text-background dark:hover:bg-foreground"
           >
             <ArrowLeft className="h-4 w-4" />
             Back to landing
-          </Link>
+          </Button>
         </div>
       </div>
 

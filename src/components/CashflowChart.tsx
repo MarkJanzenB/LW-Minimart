@@ -1,16 +1,7 @@
+import { useState, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { TrendingUp } from "lucide-react";
-
-const cashflowData = [
-  { date: "Nov 25", income: 100, expenses: 150, profit: -50 },
-  { date: "Nov 26", income: 189.75, expenses: 500, profit: -310.25 },
-  { date: "Nov 27", income: 250, expenses: 200, profit: 50 },
-  { date: "Nov 28", income: 180, expenses: 150, profit: 30 },
-  { date: "Nov 29", income: 160, expenses: 100, profit: 60 },
-  { date: "Nov 30", income: 200, expenses: 120, profit: 80 },
-  { date: "Dec 1", income: 220, expenses: 140, profit: 80 },
-];
 
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (active && payload && payload.length) {
@@ -29,6 +20,36 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 };
 
 export function CashflowChart() {
+  const [cashflowData, setCashflowData] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchCashflow = async () => {
+      try {
+        setLoading(true);
+        const response = await (window as any).api.dashboard.getMetrics();
+        if (response.success && response.data?.recentTransactions) {
+          // Transform recent transactions to cashflow format (last 7 days)
+          const data = response.data.recentTransactions.slice(-7).map((t: any) => ({
+            date: new Date(t.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+            income: t.revenue || 0,
+            expenses: 0, // Expenses tracking to be implemented
+            profit: t.revenue || 0,
+          }));
+          setCashflowData(data);
+        } else {
+          setCashflowData([]);
+        }
+      } catch (error) {
+        console.error('Failed to fetch cashflow data:', error);
+        setCashflowData([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchCashflow();
+  }, []);
   return (
     <Card className="p-6 bg-card border-border">
       <div className="flex items-center gap-2 mb-6">
@@ -36,8 +57,17 @@ export function CashflowChart() {
         <h3 className="text-lg font-semibold text-card-foreground">7-Day Cashflow Overview</h3>
       </div>
       
-      <ResponsiveContainer width="100%" height={350}>
-        <LineChart data={cashflowData}>
+      {loading ? (
+        <div className="flex items-center justify-center h-[350px]">
+          <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+        </div>
+      ) : cashflowData.length === 0 ? (
+        <div className="flex items-center justify-center h-[350px] text-muted-foreground">
+          <p>No cashflow data available</p>
+        </div>
+      ) : (
+        <ResponsiveContainer width="100%" height={350}>
+          <LineChart data={cashflowData}>
           <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.3} />
           <XAxis 
             dataKey="date" 
@@ -52,38 +82,55 @@ export function CashflowChart() {
           />
           <Tooltip content={<CustomTooltip />} />
           <Legend 
-            wrapperStyle={{ paddingTop: '20px' }}
+            wrapperStyle={{ 
+              paddingTop: '20px',
+              display: 'flex',
+              justifyContent: 'center',
+              gap: '20px',
+              marginTop: '10px'
+            }}
             iconType="circle"
+            formatter={(value, entry: any, index) => {
+              let color = '';
+              switch (value) {
+                case 'Income': color = '#22c55e'; break;
+                case 'Expenses': color = '#ef4444'; break;
+                case 'Profit': color = '#3b82f6'; break;
+                default: color = '#000';
+              }
+              return <span style={{ color }}>{value}</span>;
+            }}
           />
           <Line 
             type="monotone" 
             dataKey="income" 
-            name="Income"
-            stroke="hsl(var(--chart-income))" 
+            name="Gross Income"
+            stroke="#3b82f6" // Blue
             strokeWidth={2.5}
-            dot={{ fill: 'hsl(var(--chart-income))', r: 4 }}
-            activeDot={{ r: 6 }}
+            dot={{ fill: '#3b82f6', r: 4 }}
+            activeDot={{ r: 6, stroke: '#3b82f6', strokeWidth: 2 }}
           />
           <Line 
             type="monotone" 
             dataKey="expenses" 
             name="Expenses"
-            stroke="hsl(var(--chart-expenses))" 
+            stroke="#ef4444" // Red
             strokeWidth={2.5}
-            dot={{ fill: 'hsl(var(--chart-expenses))', r: 4 }}
-            activeDot={{ r: 6 }}
+            dot={{ fill: '#ef4444', r: 4 }}
+            activeDot={{ r: 6, stroke: '#ef4444', strokeWidth: 2 }}
           />
           <Line 
             type="monotone" 
-            dataKey="profit" 
-            name="Profit"
-            stroke="hsl(var(--chart-profit))" 
+            dataKey="revenue" 
+            name="Revenue"
+            stroke="#22c55e" // Green
             strokeWidth={2.5}
-            dot={{ fill: 'hsl(var(--chart-profit))', r: 4 }}
-            activeDot={{ r: 6 }}
+            dot={{ fill: '#22c55e', r: 4 }}
+            activeDot={{ r: 6, stroke: '#22c55e', strokeWidth: 2 }}
           />
         </LineChart>
       </ResponsiveContainer>
+      )}
     </Card>
   );
 }

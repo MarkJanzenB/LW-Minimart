@@ -1,15 +1,62 @@
-import React, { useState, useMemo, useEffect } from 'react';
-import { Calendar, Search, SlidersHorizontal, Receipt } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { Calendar, Search, Receipt } from 'lucide-react';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { Transaction } from '@/integrations/supabase/types';
-import { useTransactionStore } from '@/stores/transactionStore';
 import { formatCurrency } from '@/hooks/use-currency';
 
 function TransactionHistoryPage() {
-  const transactions = useTransactionStore((state) => state.transactions);
-  const refundInStore = useTransactionStore((state) => state.refundTransaction);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [sortOrder, setSortOrder] = useState('desc');
+  const [loading, setLoading] = useState(true);
+
+  // Fetch transactions from database
+  useEffect(() => {
+    const fetchTransactions = async () => {
+      try {
+        setLoading(true);
+        const response = await (window as any).api.transactions.getAll();
+        if (response.success && response.data) {
+          // Map database transactions to Transaction interface
+          const mappedTransactions: Transaction[] = response.data.map((t: any) => {
+            // Parse items if stored as JSON string, otherwise use empty array
+            let items: any[] = [];
+            try {
+              items = typeof t.items === 'string' ? JSON.parse(t.items) : (t.items || []);
+            } catch (e) {
+              console.error('Failed to parse transaction items:', e);
+            }
+
+            return {
+              id: t.transaction_id || t.id.toString(),
+              date: new Date(t.date || t.created_at),
+              items: items.map((item: any) => ({
+                id: item.product_id?.toString() || item.id?.toString() || '',
+                name: item.product_name || 'Unknown Product',
+                code: item.product_barcode || '',
+                price: parseFloat(item.unit_price) || 0,
+                stock: 0,
+                category: '',
+                quantity: parseInt(item.quantity) || 0,
+              })),
+              subtotal: parseFloat(t.subtotal) || 0,
+              tax: parseFloat(t.tax) || parseFloat(t.tax_amount) || 0,
+              total: parseFloat(t.total) || parseFloat(t.total_amount) || 0,
+              paymentMethod: t.payment_method || 'cash',
+              status: t.status || 'Completed',
+            };
+          });
+          setTransactions(mappedTransactions);
+        }
+      } catch (error) {
+        console.error('Failed to fetch transactions:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchTransactions();
+  }, []);
 
   const filteredTransactions = useMemo(() => {
     const term = searchTerm.toLowerCase();
@@ -25,8 +72,12 @@ function TransactionHistoryPage() {
       });
   }, [transactions, searchTerm, sortOrder]);
 
-  const handleRefund = (transactionId: string) => {
-    refundInStore(transactionId);
+  const handleRefund = async (transactionId: string) => {
+    // TODO: Implement refund in database
+    // For now, just update local state
+    setTransactions(prev => 
+      prev.map(t => t.id === transactionId ? { ...t, status: 'Refunded' } : t)
+    );
   };
 
   return (
@@ -83,8 +134,6 @@ function TransactionHistoryPage() {
               <th className="p-4 font-medium">Date</th>
               <th className="p-4 font-medium">Items</th>
               <th className="p-4 font-medium text-right">Total</th>
-              <th className="p-4 font-medium">Status</th>
-              <th className="p-4 font-medium"></th>
             </tr>
           </thead>
           <tbody>
@@ -100,26 +149,11 @@ function TransactionHistoryPage() {
                 <td className="p-4 text-muted-foreground">{new Date(t.date).toLocaleString()}</td>
                 <td className="p-4 text-muted-foreground">{t.items.reduce((sum, i) => sum + i.quantity, 0)}</td>
                 <td className="p-4 font-semibold text-right">{formatCurrency(t.total)}</td>
-                <td className="p-4">
-                  <span className={`px-2 py-1 text-xs rounded-full font-medium ${t.status === 'Refunded' ? 'bg-orange-100 text-orange-700' : 'bg-green-100 text-green-700'}`}>
-                    {t.status || 'Completed'}
-                  </span>
-                </td>
-                <td className="p-4 text-right">
-                  {t.status !== 'Refunded' && (
-                    <button 
-                      onClick={() => handleRefund(t.id)}
-                      className="px-3 py-1 border border-border rounded-md text-xs font-medium hover:bg-muted/80 bg-muted"
-                    >
-                      Refund
-                    </button>
-                  )}
-                </td>
               </tr>
             ))}
           </tbody>
         </table>
-        {filteredTransactions.length === 0 && (
+        {!loading && filteredTransactions.length === 0 && (
           <div className="text-center py-20 text-muted-foreground">
             <p>No transactions found.</p>
           </div>

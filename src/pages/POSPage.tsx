@@ -4,8 +4,9 @@ import { SidebarTrigger } from '@/components/ui/sidebar';
 import { formatCurrency } from '@/hooks/use-currency';
 
 import { Product, CartItem, Transaction, ViewState } from '@/integrations/supabase/types'; 
-import { MOCK_PRODUCTS, TAX_RATE } from '@/constants';
+import { TAX_RATE } from '@/constants';
 import { useTransactionStore } from '@/stores/transactionStore';
+import { useToast } from '@/components/ui/use-toast';
 
 import ProductCard from '@/components/ProductCard';
 import CartItemComponent from '@/components/CartItem';
@@ -15,22 +16,75 @@ import BarcodeScannerModal from '@/components/BarcodeScannerModal';
 
 function PosPage() {
   const [view, setView] = useState<ViewState>('pos');
-
-  const [products, setProducts] = useState<Product[]>(MOCK_PRODUCTS.map(p => ({...p, stock_quantity: p.stock, barcode: p.code})));
+  const [products, setProducts] = useState<Product[]>([]);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [transaction, setTransaction] = useState<Transaction | null>(null);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const kaChingAudioRef = useRef<HTMLAudioElement | null>(null);
+  const { toast } = useToast();
 
   const [selectedCartItemIndex, setSelectedCartItemIndex] = useState<number | null>(null);
   const [selectedProductIndex, setSelectedProductIndex] = useState<number | null>(0);
   const [activeList, setActiveList] = useState<'products' | 'cart'>('products');
   const [isScannerOpen, setIsScannerOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   const addTransactionToStore = useTransactionStore((state) => state.addTransaction);
 
   const searchInputRef = useRef<HTMLInputElement>(null);
   const cartItemsRef = useRef<(HTMLDivElement | null)[]>([]);
   const productItemsRef = useRef<(HTMLDivElement | null)[]>([]);
+
+  // Fetch products from SQLite database (single source of truth)
+  useEffect(() => {
+    const fetchProducts = async () => {
+      try {
+        setLoading(true);
+        console.log('POS: Fetching products from SQLite...');
+        
+        // Use products:getAll which fetches from SQLite
+        if (typeof window !== 'undefined' && (window as any).api?.products?.getAll) {
+          const response = await (window as any).api.products.getAll();
+          console.log('POS: Products response:', response);
+          
+          if (response && response.success && Array.isArray(response.data)) {
+            // Map SQLite database products to Product interface
+            const mappedProducts: Product[] = response.data
+              .filter((p: any) => p.is_active !== 0) // Only active products
+              .map((p: any) => ({
+                id: p.id?.toString() ?? '',
+                name: p.name ?? '',
+                code: p.sku || p.barcode || `PROD-${p.id}`,
+                price: Number(p.price ?? p.selling_price ?? 0),
+                stock: Number(p.stock ?? p.stock_quantity ?? 0),
+                barcode: p.barcode ?? '',
+                category: p.category ?? 'Uncategorized',
+                color: undefined,
+              }));
+            
+            console.log(`POS: Loaded ${mappedProducts.length} products from SQLite`);
+            setProducts(mappedProducts);
+          } else {
+            console.warn('POS: Invalid response from products:getAll', response);
+            setProducts([]);
+          }
+        } else {
+          console.error('POS: products:getAll API not available');
+          setProducts([]);
+        }
+      } catch (error) {
+        console.error('POS: Failed to fetch products:', error);
+        setProducts([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchProducts();
+  }, []);
+
+  // Handle barcode scanning/search - moved after addToCart is defined
 
   const displayedProducts = useMemo(() => {
     const cartQuantities = cart.reduce((acc, item) => {
@@ -52,16 +106,33 @@ function PosPage() {
     );
   }, [searchQuery, products, cart]);
 
+  const filteredProducts = useMemo(() => {
+    if (!searchQuery) return products.filter(p => p.stock > 0);
+    const query = searchQuery.toLowerCase();
+    return products.filter(p => 
+      (p.name.toLowerCase().includes(query) || 
+       p.code.toLowerCase().includes(query) ||
+       (p.category && p.category.toLowerCase().includes(query))) &&
+      p.stock > 0
+    );
+  }, [searchQuery, products]);
+
   const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
   const tax = subtotal * TAX_RATE;
   const total = subtotal + tax;
+
+  const getStockForProduct = (id: string) => {
+    const product = products.find(p => p.id === id);
+    return product ? product.stock : 0;
+  };
   
   // Cart Actions
   const addToCart = (product: Product) => {
     const cartItem = cart.find(item => item.id === product.id);
     const currentQuantityInCart = cartItem ? cartItem.quantity : 0;
+    const availableStock = getStockForProduct(product.id);
 
-    if (product.stock_quantity > currentQuantityInCart) {
+    if (currentQuantityInCart < availableStock) {
       setCart(prev => {
         const existingIndex = prev.findIndex(item => item.id === product.id);
         if (existingIndex !== -1) {
@@ -77,18 +148,46 @@ function PosPage() {
       });
       playBeep();
     } else {
-      console.log('Product is out of stock');
+      toast({
+        title: 'Out of stock',
+        description: `${product.name} has no more stock available.`,
+        variant: 'destructive',
+      });
+      playError();
     }
   };
 
   const updateQuantity = (id: string, delta: number) => {
-    setCart(prev => prev.map(item => {
-      if (item.id === id) {
-        const newQty = item.quantity + delta;
-        return newQty > 0 ? { ...item, quantity: newQty } : item;
+    const availableStock = getStockForProduct(id);
+    setCart(prev => {
+      const item = prev.find(i => i.id === id);
+      if (!item) return prev;
+
+      const newQty = item.quantity + delta;
+
+      if (newQty < 1) {
+        playDecrement();
+        return prev.filter(i => i.id !== id);
       }
-      return item;
-    }));
+
+      if (newQty > availableStock) {
+        toast({
+          title: 'Stock limit reached',
+          description: `Only ${availableStock} in stock for ${item.name}.`,
+          variant: 'destructive',
+        });
+        playError();
+        return prev;
+      }
+
+      const updated = prev.map(i => (i.id === id ? { ...i, quantity: newQty } : i));
+      if (delta > 0) {
+        playBeep();
+      } else {
+        playDecrement();
+      }
+      return updated;
+    });
   };
 
   const removeFromCart = (id: string) => {
@@ -97,58 +196,243 @@ function PosPage() {
 
   const clearCart = () => setCart([]);
 
+  // Handle barcode scanning/search (from SQLite)
+  useEffect(() => {
+    if (searchQuery.length >= 8) { // Barcode length is typically 8+ digits
+      const handleBarcodeSearch = async () => {
+        try {
+          console.log('POS: Searching for barcode:', searchQuery);
+          const response = await (window as any).api.products.getByBarcode(searchQuery);
+          console.log('POS: Barcode search response:', response);
+          
+          if (response && response.success && response.data) {
+            const product = response.data;
+            
+            // Only add if product is active
+            if (product.is_active === 0) {
+              console.warn('POS: Product found but is inactive:', product.name);
+              return;
+            }
+            
+            const mappedProduct: Product = {
+              id: product.id?.toString() ?? '',
+              name: product.name ?? '',
+              code: product.sku || product.barcode || `PROD-${product.id}`,
+              price: Number(product.price ?? product.selling_price ?? 0),
+              stock: Number(product.stock ?? product.stock_quantity ?? 0),
+              barcode: product.barcode ?? '',
+              category: product.category ?? 'Uncategorized',
+              color: undefined,
+            };
+            
+            console.log('POS: Adding product to cart via barcode:', mappedProduct);
+            addToCart(mappedProduct);
+            setSearchQuery(''); // Clear search after adding
+          } else {
+            console.log('POS: No product found for barcode:', searchQuery);
+          }
+        } catch (error) {
+          console.error('POS: Barcode search failed:', error);
+        }
+      };
+      
+      // Debounce barcode search
+      const timeoutId = setTimeout(handleBarcodeSearch, 300);
+      return () => clearTimeout(timeoutId);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchQuery, addToCart]);
+
   const handleCheckout = () => {
     if (cart.length > 0) setView('checkout');
   };
 
-  const finalizeTransaction = (amountReceived: number, method: 'cash' | 'qr', referenceNumber?: string) => {
-    const newTransaction: Transaction = {
-      id: Date.now().toString(),
-      date: new Date(),
-      items: [...cart],
-      subtotal,
-      tax,
-      total,
-      cashReceived: method === 'cash' ? amountReceived : undefined,
-      change: method === 'cash' ? amountReceived - total : undefined,
-      paymentMethod: method,
-      referenceNumber: method === 'qr' ? referenceNumber : undefined
-    };
-    addTransactionToStore(newTransaction);
-    setTransaction(newTransaction);
-    setView('receipt');
-    setCart([]);
-    playKaChing();
+  const finalizeTransaction = async (amountReceived: number, method: 'cash' | 'qr', referenceNumber?: string) => {
+    try {
+      // Get current user for transaction record
+      const { user } = await (window as any).api.auth.getCurrentUser();
+      
+      // Generate transaction ID
+      const transactionId = `TXN-${Date.now()}`;
+      
+      // Prepare transaction data for database
+      const transactionData = {
+        transaction_id: transactionId,
+        subtotal,
+        tax_amount: tax,
+        total_amount: total,
+        payment_method: method,
+        items: cart.map(item => ({
+          product_id: Number(item.id),
+          quantity: item.quantity,
+          unit_price: item.price,
+          subtotal: item.price * item.quantity,
+        })),
+        created_by: user ? user.id : null,
+      };
+
+      // Save to database
+      const response = await (window as any).api.transactions.create(transactionData);
+      
+      if (response.success) {
+        const newTransaction: Transaction = {
+          id: transactionId,
+          date: new Date(),
+          items: [...cart],
+          subtotal,
+          tax,
+          total,
+          cashReceived: method === 'cash' ? amountReceived : undefined,
+          change: method === 'cash' ? amountReceived - total : undefined,
+          paymentMethod: method,
+          referenceNumber: method === 'qr' ? referenceNumber : undefined,
+          status: 'Completed'
+        };
+        setTransaction(newTransaction);
+        setView('receipt');
+        setCart([]);
+        playKaChing();
+        
+        // Refresh products from SQLite to update stock after transaction
+        console.log('POS: Refreshing products after transaction...');
+        const productsResponse = await (window as any).api.products.getAll();
+        if (productsResponse && productsResponse.success && Array.isArray(productsResponse.data)) {
+          const mappedProducts: Product[] = productsResponse.data
+            .filter((p: any) => p.is_active !== 0) // Only active products
+            .map((p: any) => ({
+              id: p.id?.toString() ?? '',
+              name: p.name ?? '',
+              code: p.sku || p.barcode || `PROD-${p.id}`,
+              price: Number(p.price ?? p.selling_price ?? 0),
+              stock: Number(p.stock ?? p.stock_quantity ?? 0),
+              barcode: p.barcode ?? '',
+              category: p.category ?? 'Uncategorized',
+              color: undefined,
+            }));
+          console.log(`POS: Refreshed ${mappedProducts.length} products from SQLite`);
+          setProducts(mappedProducts);
+        } else {
+          console.warn('POS: Failed to refresh products after transaction', productsResponse);
+        }
+      } else {
+        throw new Error(response.message || 'Failed to save transaction');
+      }
+    } catch (error: any) {
+      console.error('Failed to finalize transaction:', error);
+      alert(`Error: ${error.message || 'Failed to save transaction'}`);
+    }
   };
 
   // Sound Effects
+  const getAudioContext = () => {
+    if (!audioCtxRef.current) {
+      audioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+    }
+    return audioCtxRef.current;
+  };
+
   const playBeep = () => {
-    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const ctx = getAudioContext();
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
+    osc.type = 'square';
+    osc.frequency.value = 1040;
+    gain.gain.value = 0.12;
     osc.connect(gain);
     gain.connect(ctx.destination);
-    osc.frequency.value = 800;
-    gain.gain.value = 0.1;
-    osc.start();
-    gain.gain.exponentialRampToValueAtTime(0.00001, ctx.currentTime + 0.1);
-    osc.stop(ctx.currentTime + 0.1);
+    const now = ctx.currentTime;
+    gain.gain.setValueAtTime(0.12, now);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.12);
+    osc.start(now);
+    osc.stop(now + 0.14);
+  };
+
+  const playDecrement = () => {
+    const ctx = getAudioContext();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sawtooth';
+    osc.frequency.value = 420;
+    gain.gain.value = 0.12;
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    const now = ctx.currentTime;
+    gain.gain.setValueAtTime(0.12, now);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.12);
+    osc.start(now);
+    osc.stop(now + 0.14);
+  };
+
+  const playError = () => {
+    const ctx = getAudioContext();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'square';
+    osc.frequency.value = 220;
+    gain.gain.value = 0.15;
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    const now = ctx.currentTime;
+    gain.gain.setValueAtTime(0.15, now);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.25);
+    osc.start(now);
+    osc.stop(now + 0.3);
   };
 
   const playKaChing = () => {
-    // Simple high pitch success sound
-    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.frequency.value = 1200;
-    gain.gain.value = 0.1;
-    osc.type = 'sine';
-    osc.start();
-    osc.frequency.exponentialRampToValueAtTime(2000, ctx.currentTime + 0.1);
-    gain.gain.exponentialRampToValueAtTime(0.00001, ctx.currentTime + 0.3);
-    osc.stop(ctx.currentTime + 0.3);
+    const KA_CHING_URL = '/sounds/kaching.mp3'; // Place your own file in public/sounds/kaching.mp3
+    if (KA_CHING_URL) {
+      try {
+        if (!kaChingAudioRef.current) {
+          kaChingAudioRef.current = new Audio(KA_CHING_URL);
+        }
+        const audio = kaChingAudioRef.current;
+        audio.currentTime = 0;
+        audio.play().catch(() => synthKaChing());
+        return;
+      } catch {
+        synthKaChing();
+        return;
+      }
+    }
+    synthKaChing();
+  };
+
+  const synthKaChing = () => {
+    // Layered "ka-ching" style effect using two quick chimes and a low thump
+    const ctx = getAudioContext();
+    const now = ctx.currentTime;
+
+    const playChime = (frequency: number, startTime: number, duration = 0.25) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.value = frequency;
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      gain.gain.setValueAtTime(0.18, startTime);
+      gain.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
+      osc.start(startTime);
+      osc.stop(startTime + duration + 0.05);
+    };
+
+    const playThump = (startTime: number) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(120, startTime);
+      osc.frequency.exponentialRampToValueAtTime(60, startTime + 0.18);
+      gain.gain.setValueAtTime(0.22, startTime);
+      gain.gain.exponentialRampToValueAtTime(0.0001, startTime + 0.2);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(startTime);
+      osc.stop(startTime + 0.25);
+    };
+
+    playThump(now);
+    playChime(1320, now + 0.05);
+    playChime(1760, now + 0.14);
   };
 
   const handleSearchEnter = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -167,6 +451,8 @@ function PosPage() {
 
   useEffect(() => {
     const handleGlobalKeys = (e: KeyboardEvent) => {
+      if (view !== 'pos') return;
+
       if (e.key === ' ' || e.key === 'Spacebar') {
         e.preventDefault();
         setIsScannerOpen(true);
@@ -250,7 +536,7 @@ function PosPage() {
   return (
     <>
       
-      <div className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-10">
+      <div className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-20">
         <div className="px-8 py-6 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <SidebarTrigger />
@@ -315,8 +601,8 @@ function PosPage() {
            </div>
         </div>
 
-        <div className="w-[35%] bg-card border-l border-border flex flex-col shadow-xl z-10 relative">
-          <div className="p-4 bg-muted/50 border-b border-border">
+        <div className="w-[35%] bg-card border-l border-border flex flex-col shadow-xl z-10 relative min-h-0">
+          <div className="p-4 bg-muted/50 border-b border-border sticky top-0 z-10">
              <div className="flex items-center gap-3">
                <div className="bg-primary p-2 rounded-lg text-primary-foreground">
                  <ShoppingCart size={20} />
@@ -328,7 +614,7 @@ function PosPage() {
              </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-4 space-y-2">
+          <div className="flex-1 overflow-y-auto p-4 pt-5 space-y-2 min-h-0">
             {cart.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-stone-400 space-y-4 opacity-60">
                 <ShoppingCart size={64} />

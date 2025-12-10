@@ -1,4 +1,5 @@
 import { useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TrendingUp, TrendingDown, DollarSign, Package, ShoppingCart, Users, LayoutDashboard, ArrowRight } from "lucide-react";
@@ -11,39 +12,87 @@ const Dashboard = () => {
   const location = useLocation();
   const isCashflow = location.pathname === "/cashflow";
   const { currency } = useCurrency();
-  
+  const [metrics, setMetrics] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
   const handleProductsClick = () => {
-    navigate("/products");
+    navigate("/inventory");
   };
-  
-  // Sample data for charts
-  const salesData = [
-    { month: "Jan", sales: 4000 },
-    { month: "Feb", sales: 3000 },
-    { month: "Mar", sales: 5000 },
-    { month: "Apr", sales: 4500 },
-    { month: "May", sales: 6000 },
-    { month: "Jun", sales: 5500 },
+
+  const handlePosClick = () => {
+    navigate("/pos");
+  };
+
+  const handleSalesHistoryClick = () => {
+    navigate("/history/sales");
+  };
+
+  const handleRestockHistoryClick = () => {
+    navigate("/history/restock");
+  };
+
+  const handleReportsClick = () => {
+    navigate("/reports");
+  };
+
+  // Fetch dashboard metrics from database
+  useEffect(() => {
+    const fetchMetrics = async () => {
+      try {
+        setLoading(true);
+        const response = await (window as any).api.dashboard.getMetrics();
+        if (response.success && response.data) {
+          setMetrics(response.data);
+        }
+      } catch (error) {
+        console.error('Failed to fetch dashboard metrics:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchMetrics();
+  }, []);
+
+  // Transform database data for charts
+  const salesData = metrics?.recentTransactions?.map((t: any, index: number) => ({
+    month: new Date(t.date).toLocaleDateString('en-US', { month: 'short' }),
+    sales: t.revenue || 0,
+  })) || [
+    { month: "Jan", sales: 0 },
+    { month: "Feb", sales: 0 },
+    { month: "Mar", sales: 0 },
+    { month: "Apr", sales: 0 },
+    { month: "May", sales: 0 },
+    { month: "Jun", sales: 0 },
   ];
 
-  const inventoryData = [
-    { category: "Electronics", value: 45 },
-    { category: "Food", value: 30 },
-    { category: "Clothing", value: 15 },
-    { category: "Other", value: 10 },
-  ];
+  // Inventory category breakdown - can be enhanced later with database query
+  // For now, show empty state if no data
+  const inventoryData = metrics?.inventory?.totalProducts > 0 ? [
+    // This would be populated from a database query for category breakdown
+    // Placeholder structure - will be replaced with real data when query is added
+  ] : [];
 
   const COLORS = ["#133020", "#FFB347", "#FFC370", "#133020"];
 
-  const revenueData = [
-    { day: "Mon", income: 2400, expenses: 1200, profit: 1200 },
-    { day: "Tue", income: 1398, expenses: 1000, profit: 398 },
-    { day: "Wed", income: 9800, expenses: 4500, profit: 5300 },
-    { day: "Thu", income: 3908, expenses: 2000, profit: 1908 },
-    { day: "Fri", income: 4800, expenses: 2200, profit: 2600 },
-    { day: "Sat", income: 3800, expenses: 1800, profit: 2000 },
-    { day: "Sun", income: 4300, expenses: 1900, profit: 2400 },
+  // Transform recent transactions to revenue data format
+  const revenueData = metrics?.recentTransactions?.map((t: any) => ({
+    day: new Date(t.date).toLocaleDateString('en-US', { weekday: 'short' }),
+    income: t.revenue || 0,
+    expenses: 0, // Expenses would need separate tracking
+    profit: t.revenue || 0,
+  })) || [
+    { day: "Mon", income: 0, expenses: 0, profit: 0 },
+    { day: "Tue", income: 0, expenses: 0, profit: 0 },
+    { day: "Wed", income: 0, expenses: 0, profit: 0 },
+    { day: "Thu", income: 0, expenses: 0, profit: 0 },
+    { day: "Fri", income: 0, expenses: 0, profit: 0 },
+    { day: "Sat", income: 0, expenses: 0, profit: 0 },
+    { day: "Sun", income: 0, expenses: 0, profit: 0 },
   ];
+
+  const recentActivity = (metrics?.recentTransactions || []).slice(-5).reverse();
 
   return (
         <>
@@ -72,10 +121,14 @@ const Dashboard = () => {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm text-muted-foreground font-medium">Total Revenue</p>
-                    <h3 className="text-3xl font-bold mt-2 text-foreground">{formatCurrency(3605)} <span className="text-lg">/{currency.code.toLowerCase()}/m</span></h3>
+                    <h3 className="text-3xl font-bold mt-2 text-foreground">
+                      {loading ? '...' : formatCurrency(metrics?.revenue?.total || 0)}
+                    </h3>
                     <div className="flex items-center mt-2 text-primary">
                       <TrendingUp className="w-4 h-4 mr-1" />
-                      <span className="text-sm font-medium">+12.5% from last month</span>
+                      <span className="text-sm font-medium">
+                        Today: {formatCurrency(metrics?.revenue?.today || 0)}
+                      </span>
                     </div>
                   </div>
                   <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
@@ -90,11 +143,15 @@ const Dashboard = () => {
               <CardContent className="pt-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-muted-foreground font-medium">Total Orders</p>
-                    <h3 className="text-3xl font-bold mt-2 text-foreground">1,254</h3>
+                    <p className="text-sm text-muted-foreground font-medium">Total Transactions</p>
+                    <h3 className="text-3xl font-bold mt-2 text-foreground">
+                      {loading ? '...' : (metrics?.revenue?.transactions || 0).toLocaleString()}
+                    </h3>
                     <div className="flex items-center mt-2 text-primary">
                       <TrendingUp className="w-4 h-4 mr-1" />
-                      <span className="text-sm font-medium">+8.2% from last week</span>
+                      <span className="text-sm font-medium">
+                        Today: {metrics?.revenue?.todayTransactions || 0}
+                      </span>
                     </div>
                   </div>
                   <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
@@ -116,10 +173,14 @@ const Dashboard = () => {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm text-muted-foreground font-medium">Products in Stock</p>
-                    <h3 className="text-3xl font-bold mt-2 text-foreground">856</h3>
+                    <h3 className="text-3xl font-bold mt-2 text-foreground">
+                      {loading ? '...' : (metrics?.inventory?.totalStock || 0).toLocaleString()}
+                    </h3>
                     <div className="flex items-center mt-2 text-destructive">
                       <TrendingDown className="w-4 h-4 mr-1" />
-                      <span className="text-sm font-medium">-3.1% from last month</span>
+                      <span className="text-sm font-medium">
+                        {metrics?.inventory?.lowStockCount || 0} low stock items
+                      </span>
                     </div>
                   </div>
                   <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
@@ -232,108 +293,88 @@ const Dashboard = () => {
           {/* Bottom Section */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Inventory Distribution */}
-            <Card className="border-2 lg:col-span-1">
+            <Card className="border-2 lg:col-span-2">
               <CardHeader>
-                <CardTitle className="text-lg font-semibold">Inventory by Category</CardTitle>
+                <CardTitle className="text-lg font-semibold">Quick Actions</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="flex flex-col items-center">
-                  <ResponsiveContainer width="100%" height={200}>
-                    <PieChart>
-                      <Pie
-                        data={inventoryData}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={0}
-                        outerRadius={80}
-                        fill="#133020"
-                        dataKey="value"
-                        label={false}
-                      >
-                        {inventoryData.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip />
-                    </PieChart>
-                  </ResponsiveContainer>
-                  <div className="grid grid-cols-2 gap-3 mt-4 w-full">
-                    {inventoryData.map((item, index) => (
-                      <div key={item.category} className="flex items-center gap-2">
-                        <div 
-                          className="w-3 h-3 rounded-full" 
-                          style={{ backgroundColor: COLORS[index % COLORS.length] }}
-                        />
-                        <span className="text-sm text-muted-foreground">
-                          {item.category}: <span className="font-semibold text-foreground">{item.value}%</span>
-                        </span>
-                      </div>
-                    ))}
-                  </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <button
+                    type="button"
+                    onClick={handlePosClick}
+                    className="w-full rounded-lg border border-border bg-card px-3 py-4 text-left hover:bg-muted transition-colors flex flex-col gap-2"
+                  >
+                    <span className="text-xs text-muted-foreground">Sell</span>
+                    <span className="text-sm font-semibold">Open POS</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleProductsClick}
+                    className="w-full rounded-lg border border-border bg-card px-3 py-4 text-left hover:bg-muted transition-colors flex flex-col gap-2"
+                  >
+                    <span className="text-xs text-muted-foreground">Stock</span>
+                    <span className="text-sm font-semibold">Manage Inventory</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleRestockHistoryClick}
+                    className="w-full rounded-lg border border-border bg-card px-3 py-4 text-left hover:bg-muted transition-colors flex flex-col gap-2"
+                  >
+                    <span className="text-xs text-muted-foreground">Purchasing</span>
+                    <span className="text-sm font-semibold">Restock History</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleReportsClick}
+                    className="w-full rounded-lg border border-border bg-card px-3 py-4 text-left hover:bg-muted transition-colors flex flex-col gap-2"
+                  >
+                    <span className="text-xs text-muted-foreground">Insights</span>
+                    <span className="text-sm font-semibold">View Reports</span>
+                  </button>
                 </div>
               </CardContent>
             </Card>
 
             {/* Top Products */}
-            <Card className="border-2 lg:col-span-2">
+            <Card className="border-2 lg:col-span-1">
               <CardHeader>
-                <CardTitle className="text-lg font-semibold">Sales by Region</CardTitle>
-                <p className="text-sm text-muted-foreground">Top performing regions</p>
+                <CardTitle className="text-lg font-semibold">Store Alerts</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-6 rounded overflow-hidden bg-primary/20 flex items-center justify-center">
-                        <span className="text-xs font-bold">US</span>
+                {loading ? (
+                  <p className="text-sm text-muted-foreground">Checking for alerts...</p>
+                ) : (
+                  <div className="space-y-3">
+                    {(metrics?.inventory?.lowStockCount || 0) > 0 && (
+                      <div className="flex items-start justify-between gap-3 p-3 rounded-lg bg-destructive/10 border border-destructive/40">
+                        <div>
+                          <p className="text-sm font-semibold text-destructive">Low / almost out-of-stock products</p>
+                          <p className="text-xs text-muted-foreground">
+                            {metrics.inventory.lowStockCount.toLocaleString()} items are at or below their reorder level.
+                          </p>
+                        </div>
                       </div>
-                      <span className="font-medium">United States</span>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-semibold">{formatCurrency(12584)}</p>
-                      <p className="text-xs text-muted-foreground">+18%</p>
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-6 rounded overflow-hidden bg-primary/20 flex items-center justify-center">
-                        <span className="text-xs font-bold">UK</span>
-                      </div>
-                      <span className="font-medium">United Kingdom</span>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-semibold">{formatCurrency(8942)}</p>
-                      <p className="text-xs text-muted-foreground">+12%</p>
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-6 rounded overflow-hidden bg-primary/20 flex items-center justify-center">
-                        <span className="text-xs font-bold">CA</span>
-                      </div>
-                      <span className="font-medium">Canada</span>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-semibold">{formatCurrency(6731)}</p>
-                      <p className="text-xs text-muted-foreground">+9%</p>
-                    </div>
-                  </div>
+                    )}
 
-                  <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-6 rounded overflow-hidden bg-primary/20 flex items-center justify-center">
-                        <span className="text-xs font-bold">AU</span>
+                    {(metrics?.inventory?.expiringSoonCount || 0) > 0 && (
+                      <div className="flex items-start justify-between gap-3 p-3 rounded-lg bg-accent/10 border border-accent/40">
+                        <div>
+                          <p className="text-sm font-semibold text-accent">Products nearing expiry</p>
+                          <p className="text-xs text-muted-foreground">
+                            {metrics.inventory.expiringSoonCount.toLocaleString()} products expire within the next 7 days.
+                          </p>
+                        </div>
                       </div>
-                      <span className="font-medium">Australia</span>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-semibold">{formatCurrency(5289)}</p>
-                      <p className="text-xs text-muted-foreground">+7%</p>
-                    </div>
+                    )}
+
+                    {(metrics?.inventory?.lowStockCount || 0) === 0 && (metrics?.inventory?.expiringSoonCount || 0) === 0 && (
+                      <p className="text-sm text-muted-foreground">No critical inventory alerts right now.</p>
+                    )}
                   </div>
-                </div>
+                )}
               </CardContent>
             </Card>
           </div>

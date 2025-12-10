@@ -45,6 +45,7 @@ CREATE TABLE IF NOT EXISTS products (
                           purchase_price NUMERIC DEFAULT 0.00,
                           selling_price NUMERIC DEFAULT 0.00,
                           reorder_threshold INTEGER DEFAULT 0,
+                          image_url TEXT,
                           is_active INTEGER DEFAULT 1,
                           created_at TEXT DEFAULT CURRENT_TIMESTAMP,
                           FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE SET NULL,
@@ -98,4 +99,53 @@ CREATE TABLE IF NOT EXISTS inventory_mirror (
   imageUrl TEXT,
   createdAt TEXT,
   updatedAt TEXT
+  );
+  
+CREATE TABLE IF NOT EXISTS sales (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    transaction_date TEXT DEFAULT CURRENT_TIMESTAMP,
+    total_amount REAL NOT NULL,
+    payment_method TEXT NOT NULL,
+    cash_received REAL,
+    change REAL,
+    reference_number TEXT
 );
+
+CREATE TABLE sale_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    sale_id INTEGER NOT NULL,
+    product_id INTEGER NOT NULL,
+    quantity INTEGER NOT NULL,
+    price REAL NOT NULL,
+    FOREIGN KEY (sale_id) REFERENCES sales(id) ON DELETE CASCADE,
+    FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE RESTRICT
+);
+
+-- Transactions table (used by POS system)
+CREATE TABLE IF NOT EXISTS transactions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    transaction_id TEXT UNIQUE NOT NULL,
+    subtotal NUMERIC DEFAULT 0.00,
+    tax_amount NUMERIC DEFAULT 0.00,
+    total_amount NUMERIC NOT NULL DEFAULT 0.00,
+    payment_method TEXT NOT NULL CHECK(payment_method IN ('cash', 'qr')),
+    status TEXT DEFAULT 'Completed' CHECK(status IN ('Completed', 'Refunded', 'Cancelled')),
+    created_by INTEGER,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS transaction_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    transaction_id INTEGER NOT NULL,
+    product_id INTEGER NOT NULL,
+    quantity INTEGER NOT NULL,
+    unit_price NUMERIC NOT NULL,
+    subtotal NUMERIC NOT NULL,
+    FOREIGN KEY (transaction_id) REFERENCES transactions(id) ON DELETE CASCADE,
+    FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE RESTRICT
+);
+
+CREATE INDEX IF NOT EXISTS idx_transactions_created_at ON transactions(created_at);
+CREATE INDEX IF NOT EXISTS idx_transaction_items_transaction ON transaction_items(transaction_id);
+CREATE INDEX IF NOT EXISTS idx_transaction_items_product ON transaction_items(product_id);

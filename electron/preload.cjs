@@ -18,4 +18,25 @@ contextBridge.exposeInMainWorld("api", {
     getMirror: () => ipcRenderer.invoke("inventory:getMirror"),
     delete: (id) => ipcRenderer.invoke("inventory:delete", id),
   },
+  db: {
+    recordSale: (transaction) => ipcRenderer.invoke("db:recordSale", transaction),
+    getSalesWithItems: () => ipcRenderer.invoke("db:getSalesWithItems"),
+  },
+  products: {
+    getAll: () => ipcRenderer.invoke("products:getAll"),
+    getByBarcode: (barcode) => ipcRenderer.invoke("products:getByBarcode", barcode),
+    getInventory: () => ipcRenderer.invoke("products:getInventory"),
+    create: (productData) => ipcRenderer.invoke("products:create", productData),
+    update: (productId, productData) => ipcRenderer.invoke("products:update", productId, productData),
+    addBatch: (productId, batchData) => ipcRenderer.invoke("products:addBatch", productId, batchData),
+    delete: (productId) => ipcRenderer.invoke("products:delete", productId),
+  },
+  transactions: {
+    getAll: (limit, offset) => ipcRenderer.invoke("transactions:getAll", limit, offset),
+    getById: (transactionId) => ipcRenderer.invoke("transactions:getById", transactionId),
+    create: (transactionData) => ipcRenderer.invoke("transactions:create", transactionData),
+  },
+  dashboard: {
+    getMetrics: () => ipcRenderer.invoke("dashboard:getMetrics"),
+  },
 });

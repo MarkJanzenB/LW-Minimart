@@ -3,6 +3,7 @@ import {
   getProducts,
   getProductByBarcode,
   recordSale,
+  getSalesWithItems,
 } from '../db/queries';
 
 export function registerDbIpc() {
@@ -30,6 +31,16 @@ export function registerDbIpc() {
       return { success: true, data: { saleId } };
     } catch (error) {
       return { success: false, message: error.message };
+    }
+  });
+
+  ipcMain.handle('db:getSalesWithItems', () => {
+    try {
+      const transactions = getSalesWithItems();
+      return { success: true, data: transactions };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return { success: false, message };
     }
   });
 }
