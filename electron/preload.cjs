@@ -39,4 +39,10 @@ contextBridge.exposeInMainWorld("api", {
   dashboard: {
     getMetrics: () => ipcRenderer.invoke("dashboard:getMetrics"),
   },
+  spoilage: {
+    moveToSpoilage: (productId, quantity, reason) =>
+      ipcRenderer.invoke("spoilage:moveToSpoilage", productId, quantity, reason),
+    getAll: (limit, offset) => ipcRenderer.invoke("spoilage:getAll", limit, offset),
+    getStats: () => ipcRenderer.invoke("spoilage:getStats"),
+  },
 });
