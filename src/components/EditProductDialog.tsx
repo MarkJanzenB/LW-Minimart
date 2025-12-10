@@ -41,91 +41,112 @@ export function EditProductDialog({
 
   useEffect(() => {
     if (product) {
-      // Fetch full product data including cost from database
+      // First, initialize form with passed product data immediately to avoid blank fields
+      const productId = typeof product.id === 'string' ? parseInt(product.id) : product.id;
+      
+      // Initialize with passed product data first
+      setFormData({
+        name: product.name || '',
+        sku: product.sku || '',
+        category: product.category || '',
+        supplier: product.supplier || '',
+        cost: product.cost != null && product.cost !== 0 ? String(product.cost) : (product.cost === 0 ? '0' : ''),
+        price: product.price != null && product.price !== 0 ? String(product.price) : (product.price === 0 ? '0' : ''),
+        stock: product.stock != null ? String(product.stock) : '',
+        minStock: product.minStock != null ? String(product.minStock) : '',
+        expiryDate: product.expiryDate || '',
+        batchNo: product.batchNo || '',
+        barcode: product.barcode || '',
+        imageUrl: product.imageUrl || product.image_url || '',
+      });
+
+      // Then fetch full product data including cost from database
       const fetchFullProductData = async () => {
         try {
-          // Get product ID - handle both string and number IDs
-          const productId = typeof product.id === 'string' ? parseInt(product.id) : product.id;
           if (isNaN(productId)) {
-            // Fallback to using product data as-is if ID is invalid
-            setFormData({
-              name: product.name || '',
-              sku: product.sku || '',
-              category: product.category || '',
-              supplier: product.supplier || '',
-              cost: product.cost != null ? String(product.cost) : '',
-              price: product.price != null ? String(product.price) : '',
-              stock: product.stock != null ? String(product.stock) : '',
-              minStock: product.minStock != null ? String(product.minStock) : '',
-              expiryDate: product.expiryDate || '',
-              batchNo: product.batchNo || '',
-              barcode: product.barcode || '',
-              imageUrl: product.imageUrl || '',
-            });
+            console.warn('Invalid product ID, using passed product data as-is');
             return;
           }
 
-          // Fetch full product data from SQLite (includes purchase_price/cost)
-          if (typeof window !== 'undefined' && (window as any).api?.products?.getAll) {
-            const response = await (window as any).api.products.getAll();
-            if (response.success && response.data) {
-              const fullProduct = response.data.find((p: any) => p.id === productId);
-              if (fullProduct) {
-                setFormData({
-                  name: fullProduct.name || '',
-                  sku: fullProduct.sku || '',
-                  category: fullProduct.category || '',
-                  supplier: fullProduct.supplier || '',
-                  cost: fullProduct.purchase_price != null ? String(fullProduct.purchase_price) : '',
-                  price: fullProduct.price != null ? String(fullProduct.price) : '',
-                  stock: fullProduct.stock != null ? String(fullProduct.stock) : '',
-                  minStock: fullProduct.reorder_threshold != null ? String(fullProduct.reorder_threshold) : '',
-                  expiryDate: product.expiryDate || '',
-                  batchNo: product.batchNo || '',
-                  barcode: fullProduct.barcode || '',
-                  imageUrl: fullProduct.image_url || fullProduct.imageUrl || '',
-                });
-                return;
-              }
+          // Fetch from both sources to get all fields
+          // products:getInventory has expiryDate
+          // products:getAll has purchase_price
+          const api = (window as any).api;
+          if (!api?.products) {
+            console.warn('Products API not available, using passed product data as-is');
+            return;
+          }
+
+          let inventoryProduct: any = null;
+          let allProductsProduct: any = null;
+
+          // Fetch from inventory to get expiry date
+          if (api.products.getInventory) {
+            const inventoryResponse = await api.products.getInventory();
+            if (inventoryResponse?.success && inventoryResponse.data) {
+              inventoryProduct = inventoryResponse.data.find((p: any) => p.id === productId);
             }
           }
 
-          // Fallback to using product data as-is
-          setFormData({
-            name: product.name || '',
-            sku: product.sku || '',
-            category: product.category || '',
-            supplier: product.supplier || '',
-            cost: product.cost != null ? String(product.cost) : '',
-            price: product.price != null ? String(product.price) : '',
-            stock: product.stock != null ? String(product.stock) : '',
-            minStock: product.minStock != null ? String(product.minStock) : '',
-            expiryDate: product.expiryDate || '',
-            batchNo: product.batchNo || '',
-            barcode: product.barcode || '',
-            imageUrl: product.imageUrl || '',
-          });
+          // Fetch from all products to get purchase_price
+          if (api.products.getAll) {
+            const allResponse = await api.products.getAll();
+            if (allResponse?.success && allResponse.data) {
+              allProductsProduct = allResponse.data.find((p: any) => p.id === productId);
+            }
+          }
+
+          // Update form with fetched data, preserving existing values as fallback
+          if (inventoryProduct || allProductsProduct) {
+            setFormData((prev) => ({
+              ...prev,
+              name: inventoryProduct?.name || allProductsProduct?.name || prev.name,
+              sku: inventoryProduct?.sku || allProductsProduct?.sku || prev.sku,
+              category: inventoryProduct?.category || allProductsProduct?.category || prev.category,
+              cost: allProductsProduct?.purchase_price != null 
+                ? String(allProductsProduct.purchase_price) 
+                : prev.cost,
+              price: inventoryProduct?.price != null 
+                ? String(inventoryProduct.price) 
+                : (allProductsProduct?.price != null ? String(allProductsProduct.price) : prev.price),
+              stock: inventoryProduct?.stock != null 
+                ? String(inventoryProduct.stock) 
+                : (allProductsProduct?.stock != null ? String(allProductsProduct.stock) : prev.stock),
+              minStock: inventoryProduct?.minStock != null 
+                ? String(inventoryProduct.minStock) 
+                : (allProductsProduct?.reorder_threshold != null 
+                    ? String(allProductsProduct.reorder_threshold) 
+                    : prev.minStock),
+              expiryDate: inventoryProduct?.expiryDate || prev.expiryDate,
+              batchNo: inventoryProduct?.batchNo || prev.batchNo,
+              barcode: inventoryProduct?.barcode || allProductsProduct?.barcode || prev.barcode,
+              imageUrl: inventoryProduct?.image_url || inventoryProduct?.imageUrl || 
+                       allProductsProduct?.image_url || allProductsProduct?.imageUrl || prev.imageUrl,
+            }));
+          }
         } catch (error) {
           console.error('Error fetching full product data:', error);
-          // Fallback to using product data as-is
-          setFormData({
-            name: product.name || '',
-            sku: product.sku || '',
-            category: product.category || '',
-            supplier: product.supplier || '',
-            cost: product.cost != null ? String(product.cost) : '',
-            price: product.price != null ? String(product.price) : '',
-            stock: product.stock != null ? String(product.stock) : '',
-            minStock: product.minStock != null ? String(product.minStock) : '',
-            expiryDate: product.expiryDate || '',
-            batchNo: product.batchNo || '',
-            barcode: product.barcode || '',
-            imageUrl: product.imageUrl || '',
-          });
+          // Form already initialized with passed product data, so no need to reset
         }
       };
 
       void fetchFullProductData();
+    } else {
+      // Reset form when product is null
+      setFormData({
+        name: '',
+        sku: '',
+        category: '',
+        supplier: '',
+        cost: '',
+        price: '',
+        stock: '',
+        minStock: '',
+        expiryDate: '',
+        batchNo: '',
+        barcode: '',
+        imageUrl: '',
+      });
     }
   }, [product]);
 
@@ -173,10 +194,16 @@ export function EditProductDialog({
         throw new Error('Invalid product ID');
       }
 
-      // Prepare update data for SQLite
-      const costValue = formData.cost ? parseFloat(formData.cost) : 0;
-      const priceValue = formData.price ? parseFloat(formData.price) : 0;
-      const minStockValue = formData.minStock ? parseInt(formData.minStock) : 0;
+      // Prepare update data for SQLite - handle empty strings and zero values correctly
+      const costValue = formData.cost !== '' && formData.cost !== null && formData.cost !== undefined 
+        ? parseFloat(formData.cost) 
+        : 0;
+      const priceValue = formData.price !== '' && formData.price !== null && formData.price !== undefined 
+        ? parseFloat(formData.price) 
+        : 0;
+      const minStockValue = formData.minStock !== '' && formData.minStock !== null && formData.minStock !== undefined 
+        ? parseInt(formData.minStock) 
+        : 0;
 
       const updateData: any = {
         name: formData.name.trim(),

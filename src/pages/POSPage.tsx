@@ -492,6 +492,18 @@ function PosPage() {
 
   const finalizeTransaction = async (amountReceived: number, method: 'cash' | 'qr', referenceNumber?: string) => {
     try {
+      // Validate QR transactions require reference number
+      if (method === 'qr') {
+        if (!referenceNumber || referenceNumber.trim().length === 0) {
+          toast({
+            title: 'Reference number required',
+            description: 'QR payment transactions require a reference number. Please enter a valid reference number.',
+            variant: 'destructive',
+          });
+          return;
+        }
+      }
+
       // Get current user for transaction record
       const { user } = await (window as any).api.auth.getCurrentUser();
       
@@ -505,6 +517,7 @@ function PosPage() {
         tax_amount: tax,
         total_amount: total,
         payment_method: method,
+        reference_number: method === 'qr' && referenceNumber ? referenceNumber.trim() : undefined,
         items: cart.map(item => ({
           product_id: Number(item.id),
           quantity: item.quantity,

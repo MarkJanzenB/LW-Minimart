@@ -43,6 +43,20 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ total, onConfirm, onCance
   const isSufficient = method === 'cash' ? isCashSufficient : isQrReady;
 
   const handlePayment = () => {
+    // Validate QR payment requires reference number
+    if (method === 'qr' && !isQrReady) {
+      toast({
+        title: 'Reference number required',
+        description: 'Please enter a reference number for QR payment transactions.',
+        variant: 'destructive',
+      });
+      // Focus on reference number input
+      if (inputRef.current) {
+        inputRef.current.focus();
+      }
+      return;
+    }
+
     if (!isSufficient) {
       toast({
         title: 'Payment incomplete',
@@ -55,7 +69,20 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ total, onConfirm, onCance
     if (method === 'cash') {
       onConfirm(parseFloat(cashRecieved || '0'), 'cash');
     } else {
-      onConfirm(total, 'qr', referenceNumber.trim());
+      // Double-check reference number is provided for QR
+      const trimmedRef = referenceNumber.trim();
+      if (!trimmedRef) {
+        toast({
+          title: 'Reference number required',
+          description: 'Reference number is required for QR payment transactions.',
+          variant: 'destructive',
+        });
+        if (inputRef.current) {
+          inputRef.current.focus();
+        }
+        return;
+      }
+      onConfirm(total, 'qr', trimmedRef);
     }
   };
 
@@ -143,7 +170,7 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ total, onConfirm, onCance
                 </div>
                 <div>
                   <label className="block text-stone-600 font-semibold mb-1 md:mb-2 text-sm md:text-base">
-                    Reference Number
+                    Reference Number <span className="text-red-500">*</span>
                   </label>
                   <input 
                     ref={inputRef}
@@ -151,8 +178,14 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ total, onConfirm, onCance
                     value={referenceNumber}
                     onChange={(e) => setReferenceNumber(e.target.value)}
                     placeholder="Reference number from QR payment"
-                    className="w-full text-xs md:text-sm p-2 md:p-2.5 bg-white border border-stone-200 rounded-xl focus:ring-4 focus:ring-orange-100 focus:border-orange-400 outline-none transition-all font-mono"
+                    required
+                    className={`w-full text-xs md:text-sm p-2 md:p-2.5 bg-white border rounded-xl focus:ring-4 focus:ring-orange-100 focus:border-orange-400 outline-none transition-all font-mono ${
+                      method === 'qr' && !isQrReady ? 'border-red-300 focus:border-red-400 focus:ring-red-100' : 'border-stone-200'
+                    }`}
                   />
+                  {method === 'qr' && !isQrReady && (
+                    <p className="text-red-500 text-xs mt-1">Reference number is required for QR payments</p>
+                  )}
                 </div>
               </div>
             )}

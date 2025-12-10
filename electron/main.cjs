@@ -559,6 +559,7 @@ ipcMain.handle("transactions:getAll", (_event, limit, offset) => {
         t.subtotal,
         t.tax_amount as tax,
         t.payment_method,
+        t.reference_number,
         t.status,
         t.created_at as date,
         ti.product_id,
@@ -587,6 +588,7 @@ ipcMain.handle("transactions:getAll", (_event, limit, offset) => {
           subtotal: row.subtotal,
           tax: row.tax,
           payment_method: row.payment_method,
+          reference_number: row.reference_number || null,
           status: row.status,
           date: row.date,
           items: []
@@ -622,6 +624,7 @@ ipcMain.handle("transactions:getById", (_event, transactionId) => {
         t.subtotal,
         t.tax_amount as tax,
         t.payment_method,
+        t.reference_number,
         t.status,
         t.created_at as date,
         ti.product_id,
@@ -648,6 +651,7 @@ ipcMain.handle("transactions:getById", (_event, transactionId) => {
       subtotal: rows[0].subtotal,
       tax: rows[0].tax,
       payment_method: rows[0].payment_method,
+      reference_number: rows[0].reference_number || null,
       status: rows[0].status,
       date: rows[0].date,
       items: rows
@@ -671,11 +675,21 @@ ipcMain.handle("transactions:getById", (_event, transactionId) => {
 
 ipcMain.handle("transactions:create", (_event, transactionData) => {
   try {
+    // Validate QR transactions require reference number
+    if (transactionData.payment_method === 'qr') {
+      if (!transactionData.reference_number || transactionData.reference_number.trim().length === 0) {
+        return { 
+          success: false, 
+          message: 'Reference number is required for QR payment transactions.' 
+        };
+      }
+    }
+
     const result = db.transaction(() => {
       // Insert transaction
       const insertTransaction = db.prepare(`
-        INSERT INTO transactions (transaction_id, subtotal, tax_amount, total_amount, payment_method, created_by, status)
-        VALUES (?, ?, ?, ?, ?, ?, 'Completed')
+        INSERT INTO transactions (transaction_id, subtotal, tax_amount, total_amount, payment_method, reference_number, created_by, status)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 'Completed')
       `);
       const transactionResult = insertTransaction.run(
         transactionData.transaction_id,
@@ -683,6 +697,7 @@ ipcMain.handle("transactions:create", (_event, transactionData) => {
         transactionData.tax_amount,
         transactionData.total_amount,
         transactionData.payment_method,
+        transactionData.payment_method === 'qr' ? transactionData.reference_number.trim() : null,
         transactionData.created_by || null
       );
       const transactionDbId = transactionResult.lastInsertRowid;
