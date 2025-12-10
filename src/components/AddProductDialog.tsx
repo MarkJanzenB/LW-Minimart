@@ -534,6 +534,8 @@ export function AddProductDialog({ isOpen, onClose, onProductAdded }: AddProduct
                 name="sku"
                 value={formData.sku}
                 readOnly
+                tabIndex={-1}
+                className="select-none cursor-not-allowed bg-muted/60"
                 required
                 placeholder="Auto-generated based on category"
               />
@@ -594,6 +596,8 @@ export function AddProductDialog({ isOpen, onClose, onProductAdded }: AddProduct
                 min="0"
                 value={formData.price}
                 readOnly
+                tabIndex={-1}
+                className="select-none cursor-not-allowed bg-muted/60"
                 required
                 placeholder="Auto-calculated from cost"
               />
@@ -644,6 +648,8 @@ export function AddProductDialog({ isOpen, onClose, onProductAdded }: AddProduct
                 name="batchNo"
                 value={formData.batchNo}
                 readOnly
+                tabIndex={-1}
+                className="select-none cursor-not-allowed bg-muted/60"
                 placeholder="Auto-generated on save"
               />
             </div>
@@ -720,6 +726,8 @@ export function AddProductDialog({ isOpen, onClose, onProductAdded }: AddProduct
                 name="batchNo"
                 value={restockData.batchNo}
                 readOnly
+                tabIndex={-1}
+                className="select-none cursor-not-allowed bg-muted/60"
                 placeholder="Auto-generated on restock"
               />
             </div>
