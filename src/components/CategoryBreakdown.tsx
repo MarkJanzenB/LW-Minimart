@@ -26,9 +26,13 @@ export function CategoryBreakdown() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let isInitialLoad = true;
+    
     const fetchCategoryData = async () => {
       try {
-        setLoading(true);
+        if (isInitialLoad) {
+          setLoading(true);
+        }
         const response = await (window as any).api.dashboard.getMetrics();
         if (response.success && response.data) {
           // Income data from transactions (all transactions are sales/income)
@@ -45,11 +49,21 @@ export function CategoryBreakdown() {
         setIncomeData([]);
         setExpenseData([]);
       } finally {
-        setLoading(false);
+        if (isInitialLoad) {
+          setLoading(false);
+          isInitialLoad = false;
+        }
       }
     };
 
+    // Fetch immediately on mount
     fetchCategoryData();
+
+    // Set up polling for real-time updates every 5 seconds
+    const intervalId = setInterval(fetchCategoryData, 5000);
+
+    // Cleanup interval on unmount
+    return () => clearInterval(intervalId);
   }, []);
 
   const incomeTotal = incomeData.reduce((sum, item) => sum + item.value, 0);

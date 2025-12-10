@@ -13,9 +13,13 @@ export function CashFlowStatement() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let isInitialLoad = true;
+    
     const fetchCashFlow = async () => {
       try {
-        setLoading(true);
+        if (isInitialLoad) {
+          setLoading(true);
+        }
         const response = await (window as any).api.dashboard.getMetrics();
         if (response.success && response.data) {
           // Calculate cash flow from transactions
@@ -47,11 +51,21 @@ export function CashFlowStatement() {
       } catch (error) {
         console.error('Failed to fetch cash flow data:', error);
       } finally {
-        setLoading(false);
+        if (isInitialLoad) {
+          setLoading(false);
+          isInitialLoad = false;
+        }
       }
     };
 
+    // Fetch immediately on mount
     fetchCashFlow();
+
+    // Set up polling for real-time updates every 5 seconds
+    const intervalId = setInterval(fetchCashFlow, 5000);
+
+    // Cleanup interval on unmount
+    return () => clearInterval(intervalId);
   }, []);
 
   if (loading || !cashFlowData) {

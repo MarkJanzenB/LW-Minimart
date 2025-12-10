@@ -24,9 +24,13 @@ export function CashFlowTrendChart() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let isInitialLoad = true;
+    
     const fetchTrendData = async () => {
       try {
-        setLoading(true);
+        if (isInitialLoad) {
+          setLoading(true);
+        }
         const response = await (window as any).api.dashboard.getMetrics();
         if (response.success && response.data?.recentTransactions) {
           // Group transactions by month
@@ -47,11 +51,21 @@ export function CashFlowTrendChart() {
         console.error('Failed to fetch trend data:', error);
         setMonthlyCashFlow([]);
       } finally {
-        setLoading(false);
+        if (isInitialLoad) {
+          setLoading(false);
+          isInitialLoad = false;
+        }
       }
     };
 
+    // Fetch immediately on mount
     fetchTrendData();
+
+    // Set up polling for real-time updates every 5 seconds
+    const intervalId = setInterval(fetchTrendData, 5000);
+
+    // Cleanup interval on unmount
+    return () => clearInterval(intervalId);
   }, []);
 
   return (

@@ -8,9 +8,13 @@ export function CashBalanceCard() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let isInitialLoad = true;
+    
     const fetchBalance = async () => {
       try {
-        setLoading(true);
+        if (isInitialLoad) {
+          setLoading(true);
+        }
         const response = await (window as any).api.dashboard.getMetrics();
         if (response.success && response.data) {
           // Calculate current balance from total revenue
@@ -23,11 +27,21 @@ export function CashBalanceCard() {
       } catch (error) {
         console.error('Failed to fetch cash balance:', error);
       } finally {
-        setLoading(false);
+        if (isInitialLoad) {
+          setLoading(false);
+          isInitialLoad = false;
+        }
       }
     };
 
+    // Fetch immediately on mount
     fetchBalance();
+
+    // Set up polling for real-time updates every 5 seconds
+    const intervalId = setInterval(fetchBalance, 5000);
+
+    // Cleanup interval on unmount
+    return () => clearInterval(intervalId);
   }, []);
 
   if (loading || !balance) {
