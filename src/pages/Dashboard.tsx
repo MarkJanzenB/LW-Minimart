@@ -2,8 +2,8 @@ import { useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { TrendingUp, TrendingDown, DollarSign, Package, ShoppingCart, Users, LayoutDashboard, ArrowRight } from "lucide-react";
-import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from "recharts";
+import { TrendingUp, TrendingDown, DollarSign, Package, ShoppingCart, Users, LayoutDashboard, ArrowRight, AlertTriangle } from "lucide-react";
+import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, Area, AreaChart, ComposedChart } from "recharts";
 import { useLocation } from "react-router-dom";
 import { formatCurrency, useCurrency } from "@/hooks/use-currency";
 
@@ -13,6 +13,7 @@ const Dashboard = () => {
   const isCashflow = location.pathname === "/cashflow";
   const { currency } = useCurrency();
   const [metrics, setMetrics] = useState<any>(null);
+  const [spoilageData, setSpoilageData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   const handleProductsClick = () => {
@@ -35,7 +36,7 @@ const Dashboard = () => {
     navigate("/reports");
   };
 
-  // Fetch dashboard metrics from database with real-time updates
+  // Fetch dashboard metrics and spoilage data from database with real-time updates
   useEffect(() => {
     let isInitialLoad = true;
     
@@ -44,9 +45,17 @@ const Dashboard = () => {
         if (isInitialLoad) {
           setLoading(true);
         }
+        
+        // Fetch dashboard metrics
         const response = await (window as any).api.dashboard.getMetrics();
         if (response.success && response.data) {
           setMetrics(response.data);
+        }
+        
+        // Fetch spoilage data to calculate expenses
+        const spoilageResponse = await (window as any).api.spoilage.getAll();
+        if (spoilageResponse.success && Array.isArray(spoilageResponse.data)) {
+          setSpoilageData(spoilageResponse.data);
         }
       } catch (error) {
         console.error('Failed to fetch dashboard metrics:', error);
@@ -68,18 +77,20 @@ const Dashboard = () => {
     return () => clearInterval(intervalId);
   }, []);
 
-  // Transform database data for charts
-  const salesData = metrics?.recentTransactions?.map((t: any, index: number) => ({
-    month: new Date(t.date).toLocaleDateString('en-US', { month: 'short' }),
-    sales: t.revenue || 0,
-  })) || [
-    { month: "Jan", sales: 0 },
-    { month: "Feb", sales: 0 },
-    { month: "Mar", sales: 0 },
-    { month: "Apr", sales: 0 },
-    { month: "May", sales: 0 },
-    { month: "Jun", sales: 0 },
-  ];
+  // Transform sales performance data for line chart
+  const salesPerformanceData = metrics?.salesPerformance?.map((t: any) => ({
+    date: new Date(t.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+    sales: parseFloat(t.sales || t.revenue || 0),
+    revenue: parseFloat(t.revenue || t.sales || 0),
+  })) || [];
+
+  // Transform top products data for horizontal bar chart
+  const topProductsData = (metrics?.topProducts || []).slice(0, 5).map((product: any) => ({
+    name: product.name || 'Unknown',
+    sales: parseFloat(product.total_sales || 0),
+    quantity: parseInt(product.quantity_sold || 0),
+    revenue: parseFloat(product.total_sales || 0),
+  })).reverse(); // Reverse for horizontal bar (top to bottom)
 
   // Inventory category breakdown - can be enhanced later with database query
   // For now, show empty state if no data
@@ -90,21 +101,41 @@ const Dashboard = () => {
 
   const COLORS = ["#133020", "#FFB347", "#FFC370", "#133020"];
 
-  // Transform recent transactions to revenue data format
-  const revenueData = metrics?.recentTransactions?.map((t: any) => ({
-    day: new Date(t.date).toLocaleDateString('en-US', { weekday: 'short' }),
-    income: t.revenue || 0,
-    expenses: 0, // Expenses would need separate tracking
-    profit: t.revenue || 0,
-  })) || [
-    { day: "Mon", income: 0, expenses: 0, profit: 0 },
-    { day: "Tue", income: 0, expenses: 0, profit: 0 },
-    { day: "Wed", income: 0, expenses: 0, profit: 0 },
-    { day: "Thu", income: 0, expenses: 0, profit: 0 },
-    { day: "Fri", income: 0, expenses: 0, profit: 0 },
-    { day: "Sat", income: 0, expenses: 0, profit: 0 },
-    { day: "Sun", income: 0, expenses: 0, profit: 0 },
-  ];
+  // Calculate daily spoilage expenses from spoilage records
+  const calculateDailySpoilageExpenses = () => {
+    const spoilageByDate = new Map<string, number>();
+    
+    spoilageData.forEach((record: any) => {
+      if (record.spoiledAt) {
+        const date = new Date(record.spoiledAt).toISOString().split('T')[0];
+        const totalCost = parseFloat(record.totalCost || 0);
+        const existing = spoilageByDate.get(date) || 0;
+        spoilageByDate.set(date, existing + totalCost);
+      }
+    });
+    
+    return spoilageByDate;
+  };
+
+  // Transform recent transactions to revenue data format, including spoilage expenses
+  const revenueData = (() => {
+    const spoilageExpenses = calculateDailySpoilageExpenses();
+    
+    return (metrics?.recentTransactions || []).map((t: any) => {
+      const transactionDate = new Date(t.date).toISOString().split('T')[0];
+      const spoilageCost = spoilageExpenses.get(transactionDate) || 0;
+      const income = parseFloat(t.revenue || 0);
+      const expenses = spoilageCost;
+      const profit = income - expenses;
+      
+      return {
+        day: new Date(t.date).toLocaleDateString('en-US', { weekday: 'short' }),
+        income,
+        expenses,
+        profit,
+      };
+    });
+  })();
 
   const recentActivity = (metrics?.recentTransactions || []).slice(-5).reverse();
 
@@ -204,20 +235,41 @@ const Dashboard = () => {
               </CardContent>
             </Card>
 
-            {/* Customers Card */}
-            <Card className="border-2 hover:shadow-lg transition-shadow">
+            {/* Expired Stocks Card */}
+            <Card className="border-2 hover:shadow-xl transition-all duration-300 shadow-lg border-amber-300/50 dark:border-amber-800/50 bg-gradient-to-br from-card via-amber-50/20 dark:via-amber-950/20 to-card">
               <CardContent className="pt-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-muted-foreground font-medium">Active Customers</p>
-                    <h3 className="text-3xl font-bold mt-2 text-foreground">432</h3>
-                    <div className="flex items-center mt-2 text-primary">
-                      <TrendingUp className="w-4 h-4 mr-1" />
-                      <span className="text-sm font-medium">+15.3% from last month</span>
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-muted-foreground font-medium mb-1.5 tracking-wide">Expired Stocks</p>
+                    <h3 className="text-3xl font-bold mt-2 mb-1 text-amber-600 dark:text-amber-500 leading-tight">
+                      {loading ? '...' : (metrics?.inventory?.expiredProductsCount || 0).toLocaleString()}
+                    </h3>
+                    <div className="flex items-center mt-3 gap-1.5">
+                      {metrics?.inventory?.expiredComparisonPercent !== undefined && !loading ? (
+                        <>
+                          {metrics.inventory.expiredComparisonPercent >= 0 ? (
+                            <TrendingUp className="w-4 h-4 flex-shrink-0 text-red-600 dark:text-red-500" />
+                          ) : (
+                            <TrendingDown className="w-4 h-4 flex-shrink-0 text-green-600 dark:text-green-500" />
+                          )}
+                          <span className={`text-sm font-semibold ${
+                            metrics.inventory.expiredComparisonPercent >= 0 
+                              ? 'text-red-600 dark:text-red-500' 
+                              : 'text-green-600 dark:text-green-500'
+                          }`}>
+                            {metrics.inventory.expiredComparisonPercent >= 0 ? '+' : ''}
+                            {Math.abs(metrics.inventory.expiredComparisonPercent).toFixed(1)}% from last month
+                          </span>
+                        </>
+                      ) : (
+                        <span className="text-sm font-medium text-amber-600/80 dark:text-amber-500/80">
+                          {metrics?.inventory?.expiredStockQuantity || 0} units expired
+                        </span>
+                      )}
                     </div>
                   </div>
-                  <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
-                    <Users className="w-6 h-6 text-primary" />
+                  <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-amber-500/20 via-amber-500/15 to-red-500/20 dark:from-amber-500/30 dark:via-amber-500/25 dark:to-red-500/30 flex items-center justify-center shadow-md border border-amber-300/40 dark:border-amber-700/40 flex-shrink-0">
+                    <AlertTriangle className="w-7 h-7 text-amber-600 dark:text-amber-500" strokeWidth={2.5} />
                   </div>
                 </div>
               </CardContent>
@@ -226,80 +278,145 @@ const Dashboard = () => {
 
           {/* Charts Section */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-            {/* Sales Trend Chart */}
-            <Card className="border-2">
+            {/* Sales Performance Over Time - Line Chart with Gradient */}
+            <Card className="border-2 shadow-sm hover:shadow-md transition-shadow">
               <CardHeader>
-                <CardTitle className="text-lg font-semibold">Sales Index</CardTitle>
-                <p className="text-sm text-muted-foreground">Monthly sales performance</p>
+                <CardTitle className="text-lg font-semibold">Sales Performance Over Time</CardTitle>
+                <p className="text-sm text-muted-foreground">Daily revenue trends (Last 30 days)</p>
               </CardHeader>
               <CardContent>
-                <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={salesData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                    <XAxis dataKey="month" stroke="hsl(var(--muted-foreground))" />
-                    <YAxis stroke="hsl(var(--muted-foreground))" />
+                <ResponsiveContainer width="100%" height={320}>
+                  <AreaChart data={salesPerformanceData} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="salesGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#133020" stopOpacity={0.3}/>
+                        <stop offset="95%" stopColor="#133020" stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.3} />
+                    <XAxis 
+                      dataKey="date" 
+                      stroke="hsl(var(--muted-foreground))" 
+                      fontSize={12}
+                      tick={{ fill: 'hsl(var(--muted-foreground))' }}
+                    />
+                    <YAxis 
+                      stroke="hsl(var(--muted-foreground))" 
+                      fontSize={12}
+                      tick={{ fill: 'hsl(var(--muted-foreground))' }}
+                      tickFormatter={(value) => formatCurrency(value)}
+                    />
                     <Tooltip 
                       contentStyle={{ 
                         backgroundColor: "hsl(var(--card))", 
                         border: "1px solid hsl(var(--border))",
-                        borderRadius: "8px"
-                      }} 
+                        borderRadius: "8px",
+                        boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1)"
+                      }}
+                      formatter={(value: any) => formatCurrency(value)}
                     />
-                    <Bar dataKey="sales" fill="#133020" radius={[8, 8, 0, 0]} />
-                  </BarChart>
+                    <Area 
+                      type="monotone" 
+                      dataKey="sales" 
+                      stroke="#133020" 
+                      strokeWidth={2.5}
+                      fill="url(#salesGradient)"
+                      dot={{ fill: "#133020", r: 4, strokeWidth: 2, stroke: "#fff" }}
+                      activeDot={{ r: 6, fill: "#133020", strokeWidth: 2, stroke: "#fff" }}
+                    />
+                  </AreaChart>
                 </ResponsiveContainer>
+                {salesPerformanceData.length > 0 && (
+                  <div className="mt-4 pt-4 border-t border-border">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">Total Sales (30 days)</span>
+                      <span className="font-semibold text-foreground">
+                        {formatCurrency(salesPerformanceData.reduce((sum: number, item: any) => sum + (item.sales || 0), 0))}
+                      </span>
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
 
-            {/* Cash Flow Chart - Income, Expenses & Profit */}
-            <Card className="border-2">
+            {/* Top 5 Best-Selling Products - Horizontal Bar Chart */}
+            <Card className="border-2 shadow-sm hover:shadow-md transition-shadow">
               <CardHeader>
-                <CardTitle className="text-lg font-semibold">Cash Flow Trends (7 Days)</CardTitle>
-                <p className="text-sm text-muted-foreground">Daily income and expenses overview</p>
+                <CardTitle className="text-lg font-semibold">Top 5 Best-Selling Products</CardTitle>
+                <p className="text-sm text-muted-foreground">Revenue contribution by product</p>
               </CardHeader>
               <CardContent>
-                <ResponsiveContainer width="100%" height={360}>
-                  <LineChart data={revenueData} margin={{ top: 10, right: 24, left: 0, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                    <XAxis dataKey="day" stroke="hsl(var(--muted-foreground))" />
-                    <YAxis stroke="hsl(var(--muted-foreground))" />
-                    <Tooltip 
-                      contentStyle={{ 
-                        backgroundColor: "hsl(var(--card))", 
-                        border: "1px solid hsl(var(--border))",
-                        borderRadius: "8px"
-                      }} 
-                    />
-                    <Line 
-                      type="monotone" 
-                      dataKey="income" 
-                      stroke="#133020" 
-                      strokeWidth={3}
-                      dot={{ fill: "#133020", r: 6, strokeWidth: 0 }}
-                      activeDot={{ r: 8, fill: "#133020" }}
-                      name="Income"
-                    />
-                    <Line 
-                      type="monotone" 
-                      dataKey="expenses" 
-                      stroke="hsl(0, 84%, 60%)" 
-                      strokeWidth={3}
-                      dot={{ fill: "hsl(0, 84%, 60%)", r: 6, strokeWidth: 0 }}
-                      activeDot={{ r: 8, fill: "hsl(0, 84%, 60%)" }}
-                      name="Expenses"
-                    />
-                    <Line 
-                      type="monotone" 
-                      dataKey="profit" 
-                      stroke="#FFB347" 
-                      strokeWidth={3}
-                      dot={{ fill: "#FFB347", r: 6, strokeWidth: 0 }}
-                      activeDot={{ r: 8, fill: "#FFB347" }}
-                      name="Profit"
-                    />
-                    <Legend />
-                  </LineChart>
-                </ResponsiveContainer>
+                {topProductsData.length > 0 ? (
+                  <>
+                    <ResponsiveContainer width="100%" height={320}>
+                      <BarChart 
+                        data={topProductsData} 
+                        layout="vertical"
+                        margin={{ top: 5, right: 30, left: 100, bottom: 5 }}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.3} horizontal={true} vertical={false} />
+                        <XAxis 
+                          type="number" 
+                          stroke="hsl(var(--muted-foreground))" 
+                          fontSize={12}
+                          tick={{ fill: 'hsl(var(--muted-foreground))' }}
+                          tickFormatter={(value) => formatCurrency(value)}
+                        />
+                        <YAxis 
+                          type="category" 
+                          dataKey="name" 
+                          stroke="hsl(var(--muted-foreground))" 
+                          fontSize={12}
+                          width={90}
+                          tick={{ fill: 'hsl(var(--muted-foreground))' }}
+                        />
+                        <Tooltip 
+                          contentStyle={{ 
+                            backgroundColor: "hsl(var(--card))", 
+                            border: "1px solid hsl(var(--border))",
+                            borderRadius: "8px",
+                            boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1)"
+                          }}
+                          formatter={(value: any, name: string) => {
+                            if (name === 'sales' || name === 'revenue') return formatCurrency(value);
+                            return value;
+                          }}
+                          labelFormatter={(label) => `Product: ${label}`}
+                        />
+                        <Bar 
+                          dataKey="sales" 
+                          fill="#133020" 
+                          radius={[0, 8, 8, 0]}
+                          name="Revenue"
+                        >
+                          {topProductsData.map((entry: any, index: number) => (
+                            <Cell key={`cell-${index}`} fill="#133020" />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                    <div className="mt-4 pt-4 border-t border-border">
+                      <div className="grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                          <span className="text-muted-foreground">Total Revenue</span>
+                          <p className="font-semibold text-foreground mt-1">
+                            {formatCurrency(topProductsData.reduce((sum: number, item: any) => sum + (item.sales || 0), 0))}
+                          </p>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Total Units Sold</span>
+                          <p className="font-semibold text-foreground mt-1">
+                            {topProductsData.reduce((sum: number, item: any) => sum + (item.quantity || 0), 0).toLocaleString()}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <div className="flex items-center justify-center h-64 text-muted-foreground">
+                    <p>No sales data available</p>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>

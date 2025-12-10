@@ -2,18 +2,25 @@ import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from "recharts";
 import { PieChart as PieChartIcon } from "lucide-react";
+import { formatCurrency } from "@/hooks/use-currency";
 
 const COLORS = ["#22c55e", "#10b981", "#3b82f6", "#8b5cf6", "#f59e0b", "#ef4444", "#06b6d4", "#ec4899"];
 
 const CustomTooltip = ({ active, payload }: any) => {
   if (active && payload && payload.length) {
     const data = payload[0];
+    const payloadData = data.payload;
     return (
       <div className="bg-card border border-border rounded-lg shadow-lg p-3">
-        <p className="text-sm font-semibold text-foreground mb-1">{data.name}</p>
+        <p className="text-sm font-semibold text-foreground mb-2">{data.name}</p>
         <p className="text-sm" style={{ color: data.payload.fill }}>
-          <span className="font-medium">Amount:</span> ${data.value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          <span className="font-medium">Amount:</span> {formatCurrency(data.value)}
         </p>
+        {payloadData.productCount !== undefined && (
+          <p className="text-xs text-muted-foreground mt-1">
+            {payloadData.productCount} product{payloadData.productCount !== 1 ? 's' : ''}
+          </p>
+        )}
       </div>
     );
   }
@@ -35,14 +42,25 @@ export function CategoryBreakdown() {
         }
         const response = await (window as any).api.dashboard.getMetrics();
         if (response.success && response.data) {
-          // Income data from transactions (all transactions are sales/income)
-          const totalRevenue = response.data.revenue?.total || 0;
-          setIncomeData([
-            { name: "Sales", value: totalRevenue, color: COLORS[0] },
-          ]);
+          // Income by product category (sales revenue by category)
+          const incomeCategories = (response.data.incomeByCategory || []).map((item: any, index: number) => ({
+            name: item.category || 'Uncategorized',
+            value: parseFloat(item.total_revenue || 0),
+            color: COLORS[index % COLORS.length],
+            productCount: parseInt(item.product_count || 0),
+            quantity: parseInt(item.total_quantity || 0),
+          }));
+          setIncomeData(incomeCategories);
           
-          // Expense data would need separate tracking - for now empty
-          setExpenseData([]);
+          // Expenses by product category (spoilage costs by category)
+          const expenseCategories = (response.data.expensesByCategory || []).map((item: any, index: number) => ({
+            name: item.category || 'Uncategorized',
+            value: parseFloat(item.total_cost || 0),
+            color: COLORS[index % COLORS.length],
+            productCount: parseInt(item.product_count || 0),
+            quantity: parseInt(item.total_quantity || 0),
+          }));
+          setExpenseData(expenseCategories);
         }
       } catch (error) {
         console.error('Failed to fetch category data:', error);
@@ -97,7 +115,7 @@ export function CategoryBreakdown() {
         <CardHeader>
           <div className="flex items-center gap-2">
             <PieChartIcon className="w-5 h-5 text-green-600 dark:text-green-400" />
-            <CardTitle className="text-xl font-semibold">Income by Category</CardTitle>
+            <CardTitle className="text-xl font-semibold">Income by Product Category</CardTitle>
           </div>
         </CardHeader>
         <CardContent>
@@ -136,16 +154,23 @@ export function CategoryBreakdown() {
                   />
                   <span className="text-muted-foreground">{item.name}</span>
                 </div>
-                <span className="font-semibold text-foreground">
-                  ${item.value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </span>
+                <div className="text-right">
+                  <span className="font-semibold text-foreground block">
+                    {formatCurrency(item.value)}
+                  </span>
+                  {item.productCount !== undefined && (
+                    <span className="text-xs text-muted-foreground">
+                      {item.productCount} product{item.productCount !== 1 ? 's' : ''}
+                    </span>
+                  )}
+                </div>
               </div>
             ))}
             <div className="pt-2 border-t border-border mt-2">
               <div className="flex items-center justify-between font-bold">
                 <span>Total Income</span>
                 <span className="text-green-600 dark:text-green-400">
-                  ${incomeTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  {formatCurrency(incomeTotal)}
                 </span>
               </div>
             </div>
@@ -158,7 +183,7 @@ export function CategoryBreakdown() {
         <CardHeader>
           <div className="flex items-center gap-2">
             <PieChartIcon className="w-5 h-5 text-red-600 dark:text-red-400" />
-            <CardTitle className="text-xl font-semibold">Expenses by Category</CardTitle>
+            <CardTitle className="text-xl font-semibold">Expenses by Product Category</CardTitle>
           </div>
         </CardHeader>
         <CardContent>
@@ -197,16 +222,23 @@ export function CategoryBreakdown() {
                   />
                   <span className="text-muted-foreground">{item.name}</span>
                 </div>
-                <span className="font-semibold text-foreground">
-                  ${item.value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </span>
+                <div className="text-right">
+                  <span className="font-semibold text-foreground block">
+                    {formatCurrency(item.value)}
+                  </span>
+                  {item.productCount !== undefined && (
+                    <span className="text-xs text-muted-foreground">
+                      {item.productCount} product{item.productCount !== 1 ? 's' : ''}
+                    </span>
+                  )}
+                </div>
               </div>
             ))}
             <div className="pt-2 border-t border-border mt-2">
               <div className="flex items-center justify-between font-bold">
                 <span>Total Expenses</span>
                 <span className="text-red-600 dark:text-red-400">
-                  ${expenseTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  {formatCurrency(expenseTotal)}
                 </span>
               </div>
             </div>
