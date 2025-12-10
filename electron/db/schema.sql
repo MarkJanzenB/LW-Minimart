@@ -129,6 +129,7 @@ CREATE TABLE IF NOT EXISTS transactions (
     tax_amount NUMERIC DEFAULT 0.00,
     total_amount NUMERIC NOT NULL DEFAULT 0.00,
     payment_method TEXT NOT NULL CHECK(payment_method IN ('cash', 'qr')),
+    reference_number TEXT,
     status TEXT DEFAULT 'Completed' CHECK(status IN ('Completed', 'Refunded', 'Cancelled')),
     created_by INTEGER,
     created_at TEXT DEFAULT CURRENT_TIMESTAMP,

@@ -64,6 +64,7 @@ db.exec(`
     tax_amount REAL DEFAULT 0,
     total_amount REAL DEFAULT 0,
     payment_method TEXT,
+    reference_number TEXT,
     status TEXT DEFAULT 'Completed' CHECK(status IN ('Completed', 'Refunded', 'Cancelled')),
     created_by INTEGER,
     created_at TEXT DEFAULT CURRENT_TIMESTAMP
@@ -111,6 +112,17 @@ try {
   const message = e instanceof Error ? e.message : String(e);
   if (!message.includes("duplicate column name")) {
     console.error("Failed to add status column to transactions table:", e);
+  }
+}
+
+// Add reference_number column to transactions table if it doesn't exist
+try {
+  db.exec("ALTER TABLE transactions ADD COLUMN reference_number TEXT");
+  console.log("✓ Added reference_number column to transactions table");
+} catch (e) {
+  const message = e instanceof Error ? e.message : String(e);
+  if (!message.includes("duplicate column name")) {
+    console.error("Failed to add reference_number column to transactions table:", e);
   }
 }
 
