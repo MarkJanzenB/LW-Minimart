@@ -459,6 +459,10 @@ function PosPage() {
             console.log('POS: Adding product to cart via barcode:', mappedProduct);
             addToCart(mappedProduct);
             setSearchQuery(''); // Clear search after adding
+            // Keep focus in the search input after auto-adding via barcode scan
+            setTimeout(() => {
+              searchInputRef.current?.focus();
+            }, 0);
           } else {
             console.log('POS: No product found for barcode:', searchQuery);
           }
@@ -718,13 +722,20 @@ function PosPage() {
   const handleSearchEnter = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && searchQuery) {
       e.preventDefault();
+      e.stopPropagation(); // Prevent event from bubbling to global handler
       const product = products.find(p => p.barcode === searchQuery);
       if (product) {
         addToCart(product);
         setSearchQuery('');
+        // Keep focus in the search input after adding product
+        setTimeout(() => {
+          searchInputRef.current?.focus();
+        }, 0);
       } else {
         // Handle product not found by maybe showing a toast notification
         console.log('Product not found');
+        // Keep focus in the search input even if product not found
+        searchInputRef.current?.focus();
       }
     }
   };
@@ -732,6 +743,9 @@ function PosPage() {
   useEffect(() => {
     const handleGlobalKeys = (e: KeyboardEvent) => {
       if (view !== 'pos') return;
+
+      // Don't handle Enter if search input is focused
+      const isSearchInputFocused = document.activeElement === searchInputRef.current;
 
       if (e.key === ' ' || e.key === 'Spacebar') {
         e.preventDefault();
@@ -769,7 +783,7 @@ function PosPage() {
         } else if (e.key === 'ArrowRight') {
           e.preventDefault();
           setSelectedProductIndex(prev => (prev !== null ? Math.min(displayedProducts.length - 1, prev + 1) : 0));
-        } else if (e.key === 'Enter') {
+        } else if (e.key === 'Enter' && !isSearchInputFocused) {
           e.preventDefault();
           if (selectedProductIndex !== null) {
             addToCart(displayedProducts[selectedProductIndex]);
