@@ -241,10 +241,10 @@ All colors MUST be HSL.
     @apply px-2 py-1 text-xs rounded-full font-medium bg-green-100 text-green-700;
   }
   .row-expired {
-    @apply bg-red-50;
+    @apply bg-red-50 dark:bg-red-950;
   }
   .row-expired:hover {
-    @apply bg-red-100;
+    @apply bg-red-100 dark:bg-red-900;
   }
   .row-low-stock {
     @apply bg-orange-50;

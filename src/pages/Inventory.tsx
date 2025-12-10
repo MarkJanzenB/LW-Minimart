@@ -1079,7 +1079,7 @@ const Inventory = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-2">Low Stock Items</p>
-                <p className="text-4xl font-display font-bold text-foreground">{stats.lowStock}</p>
+                <p className="text-4xl font-display font-bold text-foreground dark:text-black">{stats.lowStock}</p>
               </div>
               <div className="w-12 h-12 rounded-xl bg-accent/15 flex items-center justify-center">
                 <AlertTriangle className="w-6 h-6 text-accent" />
@@ -1103,7 +1103,7 @@ const Inventory = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-2">In Stock Items</p>
-                <p className="text-4xl font-display font-bold text-foreground">{stats.inStock}</p>
+                <p className="text-4xl font-display font-bold text-foreground dark:text-black">{stats.inStock}</p>
               </div>
               <div className="w-12 h-12 rounded-xl bg-primary/15 flex items-center justify-center">
                 <CheckCircle className="w-6 h-6 text-primary" />
@@ -1127,7 +1127,7 @@ const Inventory = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-2">Expired Products</p>
-                <p className="text-4xl font-display font-bold text-foreground">{stats.expired}</p>
+                <p className="text-4xl font-display font-bold text-foreground dark:text-black">{stats.expired}</p>
               </div>
               <div className="w-12 h-12 rounded-xl bg-destructive/15 flex items-center justify-center">
                 <Package className="w-6 h-6 text-destructive" />
@@ -1151,7 +1151,7 @@ const Inventory = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-2">Out of Stock Items</p>
-                <p className="text-4xl font-display font-bold text-foreground">{stats.outOfStock}</p>
+                <p className="text-4xl font-display font-bold text-foreground dark:text-black">{stats.outOfStock}</p>
               </div>
               <div className="w-12 h-12 rounded-xl bg-muted flex items-center justify-center">
                 <Package className="w-6 h-6 text-muted-foreground" />

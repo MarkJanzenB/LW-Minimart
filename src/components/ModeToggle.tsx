@@ -16,12 +16,12 @@ export const ModeToggle = () => {
     <Button
       variant="ghost"
       size="icon"
-      className="h-10 w-10 rounded-full border border-border/70 bg-white/70 text-secondary hover:bg-white dark:bg-transparent dark:text-foreground"
+      className="h-10 w-10 rounded-full border border-border/70 bg-white/70 text-black hover:bg-white dark:bg-transparent dark:text-foreground"
       onClick={() => setTheme(currentTheme === "light" ? "dark" : "light")}
       aria-label={label}
     >
       {mounted && currentTheme === "light" ? (
-        <Moon className="h-5 w-5" />
+        <Moon className="h-5 w-5 text-black" />
       ) : (
         <Sun className="h-5 w-5" />
       )}

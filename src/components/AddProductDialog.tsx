@@ -115,7 +115,7 @@ export function AddProductDialog({ isOpen, onClose, onProductAdded }: AddProduct
 
       if (name === 'cost') {
         const costNumber = parseFloat(value) || 0;
-        const sellingPrice = costNumber + costNumber * 0.5;
+        const sellingPrice = costNumber + costNumber * 0.2;
         updated.price = sellingPrice.toFixed(2);
       }
 
@@ -355,6 +355,18 @@ export function AddProductDialog({ isOpen, onClose, onProductAdded }: AddProduct
             });
 
             if (batchResponse.success) {
+              // Record restock in IndexedDB history for the Restock page
+              await dbService.addRestockRecord({
+                productId: existingProduct.id,
+                productName: existingProduct.name,
+                originalSku: existingProduct.sku,
+                restockSku: existingProduct.sku,
+                quantity: additionalStock,
+                batchNo: generatedBatchNo,
+                expiryDate: restockData.expiryDate || existingProduct.expiryDate || '',
+                barcode: restockData.barcode || existingProduct.barcode,
+              });
+
               toast.success('Product restocked successfully');
               onProductAdded();
               setIsRestockDialogOpen(false);
@@ -379,6 +391,18 @@ export function AddProductDialog({ isOpen, onClose, onProductAdded }: AddProduct
             });
 
             if (createResponse.success) {
+              // Record restock in IndexedDB history for the Restock page
+              await dbService.addRestockRecord({
+                productId: existingProduct.id,
+                productName: existingProduct.name,
+                originalSku: existingProduct.sku,
+                restockSku: existingProduct.sku,
+                quantity: additionalStock,
+                batchNo: generatedBatchNo,
+                expiryDate: restockData.expiryDate || existingProduct.expiryDate || '',
+                barcode: restockData.barcode || existingProduct.barcode,
+              });
+
               toast.success('Product restocked successfully');
               onProductAdded();
               setIsRestockDialogOpen(false);
@@ -409,6 +433,19 @@ export function AddProductDialog({ isOpen, onClose, onProductAdded }: AddProduct
           barcode: restockData.barcode,
           imageUrl: existingProduct.imageUrl,
         });
+
+        // Record restock in IndexedDB history for the Restock page
+        await dbService.addRestockRecord({
+          productId: existingProduct.id,
+          productName: existingProduct.name,
+          originalSku: existingProduct.sku,
+          restockSku,
+          quantity: additionalStock,
+          batchNo: generatedBatchNo,
+          expiryDate: restockData.expiryDate || existingProduct.expiryDate || '',
+          barcode: restockData.barcode || existingProduct.barcode,
+        });
+
         toast.success('Product restocked successfully (local only)');
         onProductAdded();
         setIsRestockDialogOpen(false);
@@ -651,8 +688,8 @@ export function AddProductDialog({ isOpen, onClose, onProductAdded }: AddProduct
                 id="restock-batchNo"
                 name="batchNo"
                 value={restockData.batchNo}
-                onChange={handleRestockFieldChange}
-                placeholder="e.g., BT-2024-001"
+                readOnly
+                placeholder="Auto-generated on restock"
               />
             </div>
             <div className="space-y-2">
