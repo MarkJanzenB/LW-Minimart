@@ -76,7 +76,7 @@ const isExpired = (expiryDate: string): boolean => {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const expiry = new Date(expiryDate);
-  return expiry < today;
+  return expiry <= today;
 };
 
 const isLowStock = (stock: number, minStock: number): boolean => {
@@ -457,6 +457,8 @@ const Inventory = () => {
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [showLowStockOnly, setShowLowStockOnly] = useState(false);
   const [showExpiredOnly, setShowExpiredOnly] = useState(false);
+  const [showInStockOnly, setShowInStockOnly] = useState(false);
+  const [showOutOfStockOnly, setShowOutOfStockOnly] = useState(false);
   const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
   const [isCategoryOpen, setIsCategoryOpen] = useState(false);
   const [sortKey, setSortKey] = useState<SortKey>("id");
@@ -510,7 +512,13 @@ const Inventory = () => {
         }
       }
 
-      const isExpiredGroup = nearestExpiry ? new Date(nearestExpiry) < today : false;
+      const isExpiredGroup = nearestExpiry
+        ? (() => {
+            const expiry = new Date(nearestExpiry);
+            expiry.setHours(0, 0, 0, 0);
+            return expiry <= today;
+          })()
+        : false;
       const isLowStockGroup = totalStock > 0 && totalStock < minStock;
 
       let status = first.status;
@@ -565,13 +573,7 @@ const Inventory = () => {
   // Calculate statistics
   const stats = useMemo(() => {
     // Low stock: items with stock > 0 and stock <= minStock (or <= 10 if minStock is 0 or not set)
-    const lowStock = groupedData.filter((item) => {
-      if (item.stock <= 0) return false;
-      if (item.minStock > 0) {
-        return item.stock <= item.minStock;
-      }
-      return item.stock <= 10; // Default threshold if minStock is not set
-    }).length;
+    const lowStock = groupedData.filter((item) => item.status === "Low Stock").length;
     const inStock = groupedData.filter((item) => item.status === "In Stock").length;
     const expired = groupedData.filter((item) => item.status === "Expired").length;
     const outOfStock = groupedData.filter((item) => item.status === "Out of Stock").length;
@@ -701,18 +703,22 @@ const Inventory = () => {
 
     // Low stock filter
     if (showLowStockOnly) {
-      data = data.filter((item) => {
-        if (item.stock <= 0) return false;
-        if (item.minStock > 0) {
-          return item.stock <= item.minStock;
-        }
-        return item.stock <= 10; // Default threshold if minStock is not set
-      });
+      data = data.filter((item) => item.status === "Low Stock");
     }
 
     // Expired filter
     if (showExpiredOnly) {
       data = data.filter((item) => item.status === "Expired");
+    }
+
+    // In-stock filter (exclude out-of-stock items when active)
+    if (showInStockOnly) {
+      data = data.filter((item) => item.status === "In Stock");
+    }
+
+    // Out-of-stock filter
+    if (showOutOfStockOnly) {
+      data = data.filter((item) => item.status === "Out of Stock");
     }
 
     // Sort
@@ -729,7 +735,7 @@ const Inventory = () => {
     });
 
     return data;
-  }, [searchTerm, selectedCategory, showLowStockOnly, showExpiredOnly, sortKey, sortDirection, groupedData]);
+  }, [searchTerm, selectedCategory, showLowStockOnly, showExpiredOnly, showInStockOnly, showOutOfStockOnly, sortKey, sortDirection, groupedData]);
 
   const paginatedData = useMemo(() => {
     const startIndex = (currentPage - 1) * itemsPerPage;
@@ -907,7 +913,7 @@ const Inventory = () => {
       const expired = inventory.filter((item) => {
         if (!item.expiryDate) return false;
         const expiry = new Date(item.expiryDate);
-        return expiry < today && item.status !== "Spoiled" && item.stock > 0;
+        return expiry <= today && item.status !== "Spoiled" && item.stock > 0;
       });
 
       if (expired.length === 0) {
@@ -1056,12 +1062,14 @@ const Inventory = () => {
         )}
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
           <button
             type="button"
             onClick={() => {
               setShowLowStockOnly(true);
               setShowExpiredOnly(false);
+              setShowInStockOnly(false);
+              setShowOutOfStockOnly(false);
               setSelectedCategory("All");
               setSearchTerm("");
             }}
@@ -1084,6 +1092,8 @@ const Inventory = () => {
             onClick={() => {
               setShowLowStockOnly(false);
               setShowExpiredOnly(false);
+              setShowInStockOnly(true);
+              setShowOutOfStockOnly(false);
               setSelectedCategory("All");
               setSearchTerm("");
             }}
@@ -1106,6 +1116,8 @@ const Inventory = () => {
             onClick={() => {
               setShowLowStockOnly(false);
               setShowExpiredOnly(true);
+              setShowInStockOnly(false);
+              setShowOutOfStockOnly(false);
               setSelectedCategory("All");
               setSearchTerm("");
             }}
@@ -1119,6 +1131,30 @@ const Inventory = () => {
               </div>
               <div className="w-12 h-12 rounded-xl bg-destructive/15 flex items-center justify-center">
                 <Package className="w-6 h-6 text-destructive" />
+              </div>
+            </div>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setShowLowStockOnly(false);
+              setShowExpiredOnly(false);
+              setShowInStockOnly(false);
+              setShowOutOfStockOnly(true);
+              setSelectedCategory("All");
+              setSearchTerm("");
+            }}
+            className="stat-card-info animate-fade-in-up opacity-0 cursor-pointer hover:scale-[1.02] transition-transform"
+            style={{ animationDelay: "400ms" }}
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-2">Out of Stock Items</p>
+                <p className="text-4xl font-display font-bold text-foreground">{stats.outOfStock}</p>
+              </div>
+              <div className="w-12 h-12 rounded-xl bg-muted flex items-center justify-center">
+                <Package className="w-6 h-6 text-muted-foreground" />
               </div>
             </div>
           </button>
@@ -1147,6 +1183,8 @@ const Inventory = () => {
                 onClick={() => {
                   setShowLowStockOnly(!showLowStockOnly);
                   setShowExpiredOnly(false);
+                  setShowInStockOnly(false);
+                  setShowOutOfStockOnly(false);
                 }}
                 className={`glass-button flex items-center gap-2 ${
                   showLowStockOnly ? "bg-inventory-warning/30 border-inventory-warning" : ""
