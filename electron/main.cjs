@@ -750,6 +750,34 @@ ipcMain.handle("dashboard:getMetrics", () => {
     `);
     const revenue = revenueStmt.get();
 
+    // Get current month revenue (from start of current month to now)
+    const currentMonthRevenueStmt = db.prepare(`
+      SELECT 
+        COALESCE(SUM(total_amount), 0) as currentMonthRevenue
+      FROM transactions
+      WHERE status = 'Completed'
+        AND created_at >= datetime('now', 'start of month')
+    `);
+    const currentMonthRevenue = currentMonthRevenueStmt.get();
+
+    // Get previous month revenue (full previous month)
+    const previousMonthRevenueStmt = db.prepare(`
+      SELECT 
+        COALESCE(SUM(total_amount), 0) as previousMonthRevenue
+      FROM transactions
+      WHERE status = 'Completed'
+        AND created_at >= datetime('now', 'start of month', '-1 month')
+        AND created_at < datetime('now', 'start of month')
+    `);
+    const previousMonthRevenue = previousMonthRevenueStmt.get();
+
+    // Calculate month-over-month percentage change
+    const currentMonth = currentMonthRevenue?.currentMonthRevenue || 0;
+    const previousMonth = previousMonthRevenue?.previousMonthRevenue || 0;
+    const monthlyChangePercent = previousMonth > 0
+      ? ((currentMonth - previousMonth) / previousMonth) * 100
+      : currentMonth > 0 ? 100 : 0;
+
     // Get total products and stock
     const inventoryStmt = db.prepare(`
       SELECT 
@@ -787,6 +815,58 @@ ipcMain.handle("dashboard:getMetrics", () => {
     const expiringSoonRow = expiringSoonStmt.get();
     const expiringSoonCount = expiringSoonRow?.expiringSoonCount || 0;
 
+    // Get expired stocks count (batches with expiry_date < today and quantity > 0)
+    const expiredStocksStmt = db.prepare(`
+      SELECT 
+        COUNT(DISTINCT p.id) as expiredProductsCount,
+        COALESCE(SUM(b.quantity), 0) as expiredStockQuantity
+      FROM products p
+      LEFT JOIN batches b ON p.id = b.product_id
+      WHERE p.is_active = 1
+        AND b.expiry_date IS NOT NULL
+        AND b.expiry_date < date('now')
+        AND COALESCE(b.quantity, 0) > 0
+    `);
+    const expiredStocksRow = expiredStocksStmt.get();
+    const expiredProductsCount = expiredStocksRow?.expiredProductsCount || 0;
+    const expiredStockQuantity = expiredStocksRow?.expiredStockQuantity || 0;
+
+    // Get expired stocks count from previous 30-day period for comparison
+    // Compare items that expired in last 30 days with items that expired 30-60 days ago
+    const currentMonthExpiredStmt = db.prepare(`
+      SELECT 
+        COUNT(DISTINCT p.id) as expiredProductsCount
+      FROM products p
+      LEFT JOIN batches b ON p.id = b.product_id
+      WHERE p.is_active = 1
+        AND b.expiry_date IS NOT NULL
+        AND b.expiry_date < date('now')
+        AND b.expiry_date >= date('now', '-30 days')
+        AND COALESCE(b.quantity, 0) > 0
+    `);
+    const currentMonthExpiredRow = currentMonthExpiredStmt.get();
+    const currentMonthExpiredCount = currentMonthExpiredRow?.expiredProductsCount || 0;
+
+    const lastMonthExpiredStmt = db.prepare(`
+      SELECT 
+        COUNT(DISTINCT p.id) as expiredProductsCount
+      FROM products p
+      LEFT JOIN batches b ON p.id = b.product_id
+      WHERE p.is_active = 1
+        AND b.expiry_date IS NOT NULL
+        AND b.expiry_date < date('now', '-30 days')
+        AND b.expiry_date >= date('now', '-60 days')
+        AND COALESCE(b.quantity, 0) > 0
+    `);
+    const lastMonthExpiredRow = lastMonthExpiredStmt.get();
+    const lastMonthExpiredCount = lastMonthExpiredRow?.expiredProductsCount || 0;
+    
+    // Calculate monthly comparison percentage
+    // Positive percentage means more expired items this month (bad), negative means fewer (good)
+    const expiredComparisonPercent = lastMonthExpiredCount > 0
+      ? ((currentMonthExpiredCount - lastMonthExpiredCount) / lastMonthExpiredCount) * 100
+      : currentMonthExpiredCount > 0 ? 100 : (lastMonthExpiredCount > 0 ? -100 : 0);
+
     // Get recent transactions for chart data
     const recentTransactionsStmt = db.prepare(`
       SELECT 
@@ -801,7 +881,7 @@ ipcMain.handle("dashboard:getMetrics", () => {
     `);
     const recentTransactions = recentTransactionsStmt.all();
 
-    // Get top products by sales
+    // Get top 5 products by sales for horizontal bar chart
     const topProductsStmt = db.prepare(`
       SELECT 
         p.id,
@@ -814,9 +894,113 @@ ipcMain.handle("dashboard:getMetrics", () => {
       WHERE t.status = 'Completed'
       GROUP BY p.id, p.name
       ORDER BY total_sales DESC
-      LIMIT 10
+      LIMIT 5
     `);
     const topProducts = topProductsStmt.all();
+
+    // Get sales performance over time (daily for last 30 days)
+    const salesPerformanceStmt = db.prepare(`
+      SELECT 
+        DATE(created_at) as date,
+        SUM(total_amount) as sales,
+        SUM(total_amount) as revenue,
+        COUNT(*) as transaction_count
+      FROM transactions
+      WHERE status = 'Completed'
+        AND created_at >= datetime('now', '-30 days')
+      GROUP BY DATE(created_at)
+      ORDER BY date ASC
+    `);
+    const salesPerformance = salesPerformanceStmt.all();
+
+    // Get income vs expenses over time (last 30 days)
+    const incomeExpensesStmt = db.prepare(`
+      SELECT 
+        DATE(date) as date,
+        SUM(CASE WHEN type = 'INCOME' THEN amount ELSE 0 END) as income,
+        SUM(CASE WHEN type = 'EXPENSE' THEN amount ELSE 0 END) as expenses
+      FROM expenses
+      WHERE date >= datetime('now', '-30 days')
+      GROUP BY DATE(date)
+      ORDER BY date ASC
+    `);
+    const incomeExpenses = incomeExpensesStmt.all();
+
+    // Also get income from transactions (sales) and merge with expenses
+    const transactionIncomeStmt = db.prepare(`
+      SELECT 
+        DATE(created_at) as date,
+        SUM(total_amount) as income
+      FROM transactions
+      WHERE status = 'Completed'
+        AND created_at >= datetime('now', '-30 days')
+      GROUP BY DATE(created_at)
+      ORDER BY date ASC
+    `);
+    const transactionIncome = transactionIncomeStmt.all();
+
+    // Merge transaction income with expenses data
+    const incomeExpensesMap = new Map();
+    incomeExpenses.forEach((row) => {
+      incomeExpensesMap.set(row.date, { date: row.date, income: 0, expenses: row.expenses || 0 });
+    });
+    transactionIncome.forEach((row) => {
+      const existing = incomeExpensesMap.get(row.date);
+      if (existing) {
+        existing.income = (existing.income || 0) + (row.income || 0);
+      } else {
+        incomeExpensesMap.set(row.date, { date: row.date, income: row.income || 0, expenses: 0 });
+      }
+    });
+    const incomeExpensesData = Array.from(incomeExpensesMap.values()).sort((a, b) => 
+      new Date(a.date).getTime() - new Date(b.date).getTime()
+    );
+
+    // Get expense categories breakdown
+    const expenseCategoriesStmt = db.prepare(`
+      SELECT 
+        category,
+        SUM(amount) as total_amount,
+        COUNT(*) as count
+      FROM expenses
+      WHERE type = 'EXPENSE'
+        AND date >= datetime('now', '-30 days')
+      GROUP BY category
+      ORDER BY total_amount DESC
+    `);
+    const expenseCategories = expenseCategoriesStmt.all();
+
+    // Get income by product category (sales by category)
+    const incomeByCategoryStmt = db.prepare(`
+      SELECT 
+        COALESCE(c.name, 'Uncategorized') as category,
+        SUM(ti.subtotal) as total_revenue,
+        COUNT(DISTINCT ti.product_id) as product_count,
+        SUM(ti.quantity) as total_quantity
+      FROM transaction_items ti
+      INNER JOIN transactions t ON ti.transaction_id = t.id
+      INNER JOIN products p ON ti.product_id = p.id
+      LEFT JOIN categories c ON p.category_id = c.id
+      WHERE t.status = 'Completed'
+      GROUP BY c.name
+      ORDER BY total_revenue DESC
+    `);
+    const incomeByCategory = incomeByCategoryStmt.all();
+
+    // Get expenses by product category (spoilage costs by category)
+    const expensesByCategoryStmt = db.prepare(`
+      SELECT 
+        COALESCE(c.name, 'Uncategorized') as category,
+        SUM(s.total_cost) as total_cost,
+        COUNT(DISTINCT s.product_id) as product_count,
+        SUM(s.quantity) as total_quantity
+      FROM spoilage s
+      INNER JOIN products p ON s.product_id = p.id
+      LEFT JOIN categories c ON p.category_id = c.id
+      GROUP BY c.name
+      ORDER BY total_cost DESC
+    `);
+    const expensesByCategory = expensesByCategoryStmt.all();
 
     // Get inventory by category breakdown
     const categoryBreakdownStmt = db.prepare(`
@@ -852,16 +1036,27 @@ ipcMain.handle("dashboard:getMetrics", () => {
           today: revenue?.todayRevenue || 0,
           transactions: revenue?.totalTransactions || 0,
           todayTransactions: revenue?.todayTransactions || 0,
+          currentMonth: currentMonth || 0,
+          previousMonth: previousMonth || 0,
+          monthlyChangePercent: monthlyChangePercent || 0,
         },
         inventory: {
           totalProducts: inventory?.totalProducts || 0,
           totalStock: inventory?.totalStock || 0,
           lowStockCount: lowStockCount || 0,
           expiringSoonCount,
+          expiredProductsCount: expiredProductsCount || 0,
+          expiredStockQuantity: expiredStockQuantity || 0,
+          expiredComparisonPercent: expiredComparisonPercent || 0,
         },
         recentTransactions: recentTransactions || [],
         topProducts: topProducts || [],
         inventoryByCategory: inventoryByCategory || [],
+        salesPerformance: salesPerformance || [],
+        incomeExpenses: incomeExpensesData || [],
+        expenseCategories: expenseCategories || [],
+        incomeByCategory: incomeByCategory || [],
+        expensesByCategory: expensesByCategory || [],
       }
     };
   } catch (error) {

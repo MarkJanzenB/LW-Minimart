@@ -24,11 +24,15 @@ export function TransactionList() {
   const [transactions, setTransactions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Fetch transactions from database
+  // Fetch transactions from database with real-time updates
   useEffect(() => {
+    let isInitialLoad = true;
+    
     const fetchTransactions = async () => {
       try {
-        setLoading(true);
+        if (isInitialLoad) {
+          setLoading(true);
+        }
         const response = await (window as any).api.transactions.getAll();
         if (response.success && response.data) {
           // Map database transactions to component format
@@ -45,11 +49,21 @@ export function TransactionList() {
       } catch (error) {
         console.error('Failed to fetch transactions:', error);
       } finally {
-        setLoading(false);
+        if (isInitialLoad) {
+          setLoading(false);
+          isInitialLoad = false;
+        }
       }
     };
 
+    // Fetch immediately on mount
     fetchTransactions();
+
+    // Set up polling for real-time updates every 5 seconds
+    const intervalId = setInterval(fetchTransactions, 5000);
+
+    // Cleanup interval on unmount
+    return () => clearInterval(intervalId);
   }, []);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterType, setFilterType] = useState<string>("all");

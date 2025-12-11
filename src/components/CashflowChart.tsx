@@ -24,9 +24,13 @@ export function CashflowChart() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let isInitialLoad = true;
+    
     const fetchCashflow = async () => {
       try {
-        setLoading(true);
+        if (isInitialLoad) {
+          setLoading(true);
+        }
         const response = await (window as any).api.dashboard.getMetrics();
         if (response.success && response.data?.recentTransactions) {
           // Transform recent transactions to cashflow format (last 7 days)
@@ -44,11 +48,21 @@ export function CashflowChart() {
         console.error('Failed to fetch cashflow data:', error);
         setCashflowData([]);
       } finally {
-        setLoading(false);
+        if (isInitialLoad) {
+          setLoading(false);
+          isInitialLoad = false;
+        }
       }
     };
 
+    // Fetch immediately on mount
     fetchCashflow();
+
+    // Set up polling for real-time updates every 5 seconds
+    const intervalId = setInterval(fetchCashflow, 5000);
+
+    // Cleanup interval on unmount
+    return () => clearInterval(intervalId);
   }, []);
   return (
     <Card className="p-6 bg-card border-border">
